@@ -17,7 +17,6 @@ namespace OpenHardwareMonitor.DAL
         private string _dbFile;
         private SQLiteConnection _sqliteConnection;
         private static DataManager s_dataManager = new DataManager();
-        private static SQLiteCommand s_sqlCommand = new SQLiteCommand(s_dataManager._sqliteConnection);
         private static long s_macAddress = -1;
         private static DateTime s_unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 
@@ -84,10 +83,6 @@ namespace OpenHardwareMonitor.DAL
 
         public static long GetComponentId(string name, string type)
         {
-            const string c_getCompoenntIdQuery1 = "SELECT ComponentId FROM Component WHERE Name = '";
-            const string c_getCompoenntIdQuery2 = "' and Type = '";
-            const string c_getCompoenntIdQuery3 = "'";
-
             if (String.IsNullOrEmpty(name))
             {
                 throw new ArgumentException("Name must not be null or empty", "name");
@@ -101,8 +96,14 @@ namespace OpenHardwareMonitor.DAL
             long componentId = -1;
             lock (s_lockObject)
             {
-                s_sqlCommand.CommandText = c_getCompoenntIdQuery1 + name + c_getCompoenntIdQuery2 + type + c_getCompoenntIdQuery3;
-                using (SQLiteDataReader reader = s_sqlCommand.ExecuteReader())
+                const string c_getCompoenntIdQuery = "SELECT ComponentId FROM Component WHERE Name = @name and Type = @type";
+            
+                SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection);
+                sqlQueryCommand.CommandText = c_getCompoenntIdQuery;
+                sqlQueryCommand.Parameters.Add(new SQLiteParameter("@name", name));
+                sqlQueryCommand.Parameters.Add(new SQLiteParameter("@type", type));
+
+                using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
                 {
                     while (reader.Read())
                     {
@@ -112,13 +113,17 @@ namespace OpenHardwareMonitor.DAL
 
                 if (componentId == -1)
                 {
-                    const string c_insertComponent1 = "INSERT INTO Component (Name,Type) values ('";
-                    const string c_insertComponent2 = "','";
-                    const string c_insertComponent3 = "')";
+                    using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                    {
+                        const string c_insertComponent = "INSERT INTO Component (Name,Type) values (@name,@type)";
 
-                    s_sqlCommand.CommandText = c_insertComponent1 + name + c_insertComponent2 + type + c_insertComponent3;
-                    s_sqlCommand.ExecuteNonQuery();
-                    componentId = s_dataManager._sqliteConnection.LastInsertRowId;
+                        sqlInsertCommand.CommandText = c_insertComponent;
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@name", name));
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@type", type));
+
+                        sqlInsertCommand.ExecuteNonQuery();
+                        componentId = s_dataManager._sqliteConnection.LastInsertRowId;
+                    }
                 }
             }
 
@@ -127,11 +132,6 @@ namespace OpenHardwareMonitor.DAL
 
         public static long GetComputerComponentId(long componentId, long parentComponentId)
         {
-            const string c_getCompoenntIdQuery1 = "SELECT ComputerComponentID FROM ComputerComponent WHERE ComputerID = '";
-            const string c_getCompoenntIdQuery2 = "' and ComponentID = '";
-            const string c_getCompoenntIdQuery3 = "' and ParentComputerComponentID = '";
-            const string c_getCompoenntIdQuery4 = "'";
-
             if (componentId <= 0)
             {
                 throw new ArgumentException("ComponentId must not be positive", "componentId");
@@ -146,40 +146,42 @@ namespace OpenHardwareMonitor.DAL
 
             lock (s_lockObject)
             {
-                s_sqlCommand.CommandText = c_getCompoenntIdQuery1 +
-                    CurrentComputerId + 
-                    c_getCompoenntIdQuery2 + 
-                    componentId + 
-                    c_getCompoenntIdQuery3 +
-                    parentComponentId +
-                    c_getCompoenntIdQuery4;
-                using (SQLiteDataReader reader = s_sqlCommand.ExecuteReader())
+                using (SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
-                    if (reader.HasRows)
+                    const string c_getCompoenntIdQuery = "SELECT ComputerComponentID FROM ComputerComponent WHERE ComputerID = @computerId and ComponentID = @componentId and ParentComputerComponentID = @parentComponentId";
+
+                    sqlQueryCommand.CommandText = c_getCompoenntIdQuery;
+                    sqlQueryCommand.Parameters.Add(new SQLiteParameter("@computerId", CurrentComputerId));
+                    sqlQueryCommand.Parameters.Add(new SQLiteParameter("@componentId", componentId));
+                    sqlQueryCommand.Parameters.Add(new SQLiteParameter("@parentComponentId", parentComponentId));
+
+                    using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
                     {
-                        while (reader.Read())
+                        if (reader.HasRows)
                         {
-                            //if (reader.
-                            computerComponentId = Convert.ToInt64(reader["ComponentID"]);
+                            while (reader.Read())
+                            {
+                                //if (reader.
+                                computerComponentId = Convert.ToInt64(reader["ComponentID"]);
+                            }
                         }
                     }
                 }
 
                 if (computerComponentId == -1)
                 {
-                    const string c_insertComponent1 = "INSERT INTO ComputerComponent (ComputerID,ComponentID,ParentComputerComponentID) values ('";
-                    const string c_insertComponent2 = "','";
-                    const string c_insertComponent3 = "')";
+                    const string c_insertComponent = "INSERT INTO ComputerComponent (ComputerID,ComponentID,ParentComputerComponentID) values (@computerId,@componentId,@parentComponentId)";
+                    
+                    using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                    {
+                        sqlInsertCommand.CommandText = c_insertComponent;
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@computerId", CurrentComputerId));
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentId", componentId));
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@parentComponentId", parentComponentId));
 
-                    s_sqlCommand.CommandText = c_insertComponent1 + 
-                        CurrentComputerId + 
-                        c_insertComponent2 + 
-                        componentId +
-                        c_insertComponent2 + 
-                        parentComponentId +
-                        c_insertComponent3;
-                    s_sqlCommand.ExecuteNonQuery();
-                    computerComponentId = s_dataManager._sqliteConnection.LastInsertRowId;
+                        sqlInsertCommand.ExecuteNonQuery();
+                        computerComponentId = s_dataManager._sqliteConnection.LastInsertRowId;
+                    }
                 }
             }
 
@@ -188,10 +190,6 @@ namespace OpenHardwareMonitor.DAL
 
         public static long GetSensorTypeId(string name, string units)
         {
-            const string c_getSensorTypeIdQuery1 = "SELECT SensorTypeID FROM SensorType WHERE Name = '";
-            const string c_getSensorTypeIdQuery2 = "' and Units = '";
-            const string c_getSensorTypeIdQuery3 = "'";
-
             if (String.IsNullOrEmpty(name))
             {
                 throw new ArgumentException("Name must not be null or empty", "name");
@@ -205,24 +203,36 @@ namespace OpenHardwareMonitor.DAL
             long sensorTypeId = -1;
             lock (s_lockObject)
             {
-                s_sqlCommand.CommandText = c_getSensorTypeIdQuery1 + name + c_getSensorTypeIdQuery2 + units + c_getSensorTypeIdQuery3;
-                using (SQLiteDataReader reader = s_sqlCommand.ExecuteReader())
+                using (SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
-                    while (reader.Read())
+                    const string c_getSensorTypeIdQuery = "SELECT SensorTypeID FROM SensorType WHERE Name = @name and Units = @units";
+
+                    sqlQueryCommand.CommandText = c_getSensorTypeIdQuery;
+                    sqlQueryCommand.Parameters.Add(new SQLiteParameter("@name", name));
+                    sqlQueryCommand.Parameters.Add(new SQLiteParameter("@units", units));
+
+                    using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
                     {
-                        sensorTypeId = Convert.ToInt64(reader["SensorTypeID"]);
+                        while (reader.Read())
+                        {
+                            sensorTypeId = Convert.ToInt64(reader["SensorTypeID"]);
+                        }
                     }
                 }
 
                 if (sensorTypeId == -1)
                 {
-                    const string c_insertSensorType1 = "INSERT INTO SensorType (Name,Units) values ('";
-                    const string c_insertSensorType2 = "','";
-                    const string c_insertSensorType3 = "')";
+                    const string c_insertSensorType = "INSERT INTO SensorType (Name,Units) values (@name,@units)";
 
-                    s_sqlCommand.CommandText = c_insertSensorType1 + name + c_insertSensorType2 + units + c_insertSensorType3;
-                    s_sqlCommand.ExecuteNonQuery();
-                    sensorTypeId = s_dataManager._sqliteConnection.LastInsertRowId;
+                    using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                    {
+                        sqlInsertCommand.CommandText = c_insertSensorType;
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@name", name));
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@units", units));
+                        
+                        sqlInsertCommand.ExecuteNonQuery();
+                        sensorTypeId = s_dataManager._sqliteConnection.LastInsertRowId;
+                    }
                 }
             }
 
@@ -231,9 +241,6 @@ namespace OpenHardwareMonitor.DAL
 
         public static long GetComputerId(int macAddress)
         {
-            const string c_getComputerIdQuery1 = "SELECT ComputerID FROM Computer WHERE MACAddress = '";
-            const string c_getComputerIdQuery2 = "'";
-
             if (macAddress <= 0)
             {
                 throw new ArgumentException("MAC Address must not be null or empty", "macAddress");
@@ -242,24 +249,34 @@ namespace OpenHardwareMonitor.DAL
             long computerId = -1;
             lock (s_lockObject)
             {
-                s_sqlCommand.CommandText = c_getComputerIdQuery1 + macAddress + c_getComputerIdQuery2;
-                using (SQLiteDataReader reader = s_sqlCommand.ExecuteReader())
+                using (SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
-                    while (reader.Read())
+                    const string c_getComputerIdQuery = "SELECT ComputerID FROM Computer WHERE MACAddress = @address";
+            
+                    sqlQueryCommand.CommandText = c_getComputerIdQuery;
+                    sqlQueryCommand.Parameters.Add(new SQLiteParameter("@address", macAddress));
+
+                    using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
                     {
-                        computerId = Convert.ToInt64(reader["SensorTypeID"]);
+                        while (reader.Read())
+                        {
+                            computerId = Convert.ToInt64(reader["SensorTypeID"]);
+                        }
                     }
                 }
 
                 if (computerId == -1)
                 {
-                    const string c_insertComputer1 = "INSERT INTO Computer (MACAddress,IPAddress) values ('";
-                    const string c_insertComputer2 = "','";
-                    const string c_insertComputer3 = "')";
+                    const string c_insertComputer = "INSERT INTO Computer (MACAddress,IPAddress) values (@mac,@ip)";
 
-                    s_sqlCommand.CommandText = c_insertComputer1 + macAddress + c_insertComputer2 + "1" + c_insertComputer3;
-                    s_sqlCommand.ExecuteNonQuery();
-                    computerId = s_dataManager._sqliteConnection.LastInsertRowId;
+                    using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                    {
+                        sqlInsertCommand.CommandText = c_insertComputer;
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@mac", macAddress));
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@comipputerId", 1));
+                        sqlInsertCommand.ExecuteNonQuery();
+                        computerId = s_dataManager._sqliteConnection.LastInsertRowId;
+                    }
                 }
             }
 
@@ -270,8 +287,7 @@ namespace OpenHardwareMonitor.DAL
         #region Insert Methods
         public static void InsertUser(string userName, string name)
         {
-            const string c_userExistsQuery1 = "SELECT Username FROM User WHERE Username = '";
-            const string c_userExistsQuery2 = "'";
+            const string c_userExistsQuery = "SELECT Username FROM User WHERE Username = @userName";
 
             if (String.IsNullOrEmpty(userName))
             {
@@ -285,28 +301,30 @@ namespace OpenHardwareMonitor.DAL
 
             lock (s_lockObject)
             {
-                s_sqlCommand.CommandText = c_userExistsQuery1 + userName + c_userExistsQuery2;
-                using (SQLiteDataReader reader = s_sqlCommand.ExecuteReader())
+                using (SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
-                    if (reader.Read())
+                    sqlQueryCommand.CommandText = c_userExistsQuery;
+                    sqlQueryCommand.Parameters.Add(new SQLiteParameter("@userName", userName));
+                    using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
                     {
-                        throw new ArgumentException("Username must not already exist", "userName");
+                        if (reader.Read())
+                        {
+                            throw new ArgumentException("Username must not already exist", "userName");
+                        }
                     }
                 }
 
-                const string c_insertComponent1 = "INSERT INTO User (Username,Name,LastAccessTime) values ('";
-                const string c_insertComponent2 = "','";
-                const string c_insertComponent3 = "')";
+                const string c_insertUser = "INSERT INTO User (Username,Name,LastAccessTime) values (@userName,@name,@lastAccessTime)";
 
-                s_sqlCommand.CommandText = c_insertComponent1 + 
-                    userName + 
-                    c_insertComponent2 + 
-                    name + 
-                    c_insertComponent2 + 
-                    "0" + 
-                    c_insertComponent3;
+                using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    sqlInsertCommand.CommandText = c_insertUser;
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@userName", userName));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@name", name));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@lastAccessTime", ((int)(DateTime.UtcNow - s_unixEpoch).TotalSeconds)));
 
-                s_sqlCommand.ExecuteNonQuery();                
+                    sqlInsertCommand.ExecuteNonQuery();
+                }
             }
         }
 
@@ -314,21 +332,18 @@ namespace OpenHardwareMonitor.DAL
         {
             lock (s_lockObject)
             {
-                const string c_insertComponent1 = "INSERT INTO SensorData (ComputerComponentID,Date,SensorTypeID,Value) values ('";
-                const string c_insertComponent2 = "','";
-                const string c_insertComponent3 = "')";
+                const string c_insertSensorData = "INSERT INTO SensorData (ComputerComponentID,Date,SensorTypeID,Value) values (@componentId,@date,@sensorTypeId,@Value)";
 
-                s_sqlCommand.CommandText = c_insertComponent1 +
-                    computerComponentId +
-                    c_insertComponent2 +
-                    ((int)(DateTime.UtcNow - s_unixEpoch).TotalSeconds) +
-                    c_insertComponent2 +
-                    sensorTypeID +
-                    c_insertComponent2 +
-                    value +
-                    c_insertComponent3;
+                using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    sqlInsertCommand.CommandText = c_insertSensorData;
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentId", computerComponentId));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@date", ((int)(DateTime.UtcNow - s_unixEpoch).TotalSeconds)));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeID));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@Value", value));
 
-                s_sqlCommand.ExecuteNonQuery();
+                    sqlInsertCommand.ExecuteNonQuery();
+                }
             }
         }
         #endregion
