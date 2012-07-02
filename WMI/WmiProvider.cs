@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Management.Instrumentation;
 using OpenHardwareMonitor.Hardware;
+using OpenHardwareMonitor.DAL;
 
 [assembly: Instrumented("root/OpenHardwareMonitor")]
 
@@ -53,6 +54,8 @@ namespace OpenHardwareMonitor.WMI {
 
         Hardware hw = new Hardware(hardware);
         activeInstances.Add(hw);
+        
+        DataManager.AddHardwareToDB(hardware);
 
         try {
           Instrumentation.Publish(hw);

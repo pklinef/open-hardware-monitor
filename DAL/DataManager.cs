@@ -346,6 +346,76 @@ namespace OpenHardwareMonitor.DAL
                 }
             }
         }
+
+
+
+        public static void AddHardwareToDB(Hardware.IHardware hardware)
+        {
+            lock (s_lockObject)
+            {
+                SQLiteDataReader reader;
+                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+
+                    command.CommandText = "SELECT * FROM ComputerComponent WHERE ComputerComponentID = @computerComponentId";
+                    command.Parameters.Add(new SQLiteParameter("@computerComponentId", hardware.Identifier.ToString()));
+                    reader = command.ExecuteReader();
+
+                    if (reader.HasRows)
+                        return;
+                }
+                
+                Int64 componentId = -1;
+
+                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    command.CommandText = "SELECT ComponentID FROM Component WHERE Name = '@componentName' AND Type = '@componentType'";
+                    command.Parameters.Add(new SQLiteParameter("@componentName", hardware.Name));
+                    command.Parameters.Add(new SQLiteParameter("@componentType", hardware.HardwareType.ToString()));
+                    reader = command.ExecuteReader();
+
+                    
+                    if (reader.HasRows)
+                    {
+                        while (reader.Read())
+                            componentId = Convert.ToInt64(reader["ComponentID"]);
+
+                    }
+                }
+
+
+
+                if (componentId == -1)
+                {
+                    using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                    {
+                        command.CommandText = "INSERT INTO Component (Name, Type) values (@componentName, @componentType)";
+                        command.Parameters.Add(new SQLiteParameter("@componentName", hardware.Name));
+                        command.Parameters.Add(new SQLiteParameter("@componentType", hardware.HardwareType.ToString()));
+                        command.ExecuteNonQuery();
+
+                        command.CommandText = "SELECT ComponentID FROM Component WHERE Name = @componentName AND Type = @componentType";
+                        command.Parameters.Add(new SQLiteParameter("@componentName", hardware.Name));
+                        command.Parameters.Add(new SQLiteParameter("@componentType", hardware.HardwareType.ToString()));
+                        reader = command.ExecuteReader();
+
+                        while (reader.Read())
+                            componentId = Convert.ToInt64(reader["ComponentID"]);
+
+                    }
+                }
+
+                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    command.CommandText = "INSERT INTO ComputerComponent (ComputerComponentID, ComputerID, ComponentID, ParentComputerComponentID) values (@computerComponentId, @computerId, @componentId, @parentComputerComponentId)";
+                    command.Parameters.Add(new SQLiteParameter("@computerComponentId", hardware.Identifier.ToString()));
+                    command.Parameters.Add(new SQLiteParameter("@computerId", 1));  //NOTE: hard coded!!!
+                    command.Parameters.Add(new SQLiteParameter("@componentId", componentId));
+                    command.Parameters.Add(new SQLiteParameter("@parentComputerComponentId", (hardware.Parent == null?"":hardware.Parent.Identifier.ToString())));
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
         #endregion
     }
 }
