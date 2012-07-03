@@ -29,17 +29,24 @@ namespace OpenHardwareMonitor.WMI {
 
     public WmiProvider(IComputer computer) {
       activeInstances = new List<IWmiObject>();
+      DataManager.Initialize();
 
-      foreach (IHardware hardware in computer.Hardware)
-        ComputerHardwareAdded(hardware);
+      DataManager.BeginTransaction();
+      foreach (IHardware hardware in computer.Hardware) {
+          ComputerHardwareAdded(hardware);
+      }
+      DataManager.EndTransaction();
 
       computer.HardwareAdded += ComputerHardwareAdded;
       computer.HardwareRemoved += ComputerHardwareRemoved;
     }
 
     public void Update() {
-      foreach (IWmiObject instance in activeInstances)
-        instance.Update();
+        DataManager.BeginTransaction();
+        foreach (IWmiObject instance in activeInstances) {
+            instance.Update();
+        }
+        DataManager.EndTransaction();
     }
 
     #region Eventhandlers
@@ -55,7 +62,7 @@ namespace OpenHardwareMonitor.WMI {
         Hardware hw = new Hardware(hardware);
         activeInstances.Add(hw);
         
-        DataManager.AddHardwareToDB(hardware);
+        DataManager.AddHardware(hardware);
 
         try {
           Instrumentation.Publish(hw);

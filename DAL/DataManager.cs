@@ -8,6 +8,7 @@ using System.IO;
 using System.Data;
 using System.Management;
 using System.Net.NetworkInformation;
+using OpenHardwareMonitor.Hardware;
 
 namespace OpenHardwareMonitor.DAL
 {
@@ -17,24 +18,154 @@ namespace OpenHardwareMonitor.DAL
         private string _dbFile;
         private SQLiteConnection _sqliteConnection;
         private static DataManager s_dataManager = new DataManager();
+        private static Boolean s_transactionStarted = false;
         private static long s_macAddress = -1;
-        private static DateTime s_unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 
         private DataManager()
         {
-            _dbFile = "sqlite.s3db";
+            _dbFile = "ohm.db";
             string currentPath;
             string absolutePath;
-            string connectionString;
 
             currentPath = System.IO.Path.GetDirectoryName(Application.ExecutablePath); 
             absolutePath = System.IO.Path.Combine(currentPath, _dbFile);
 
-            connectionString = string.Format(@"Data Source={0}", absolutePath);
+            SQLiteConnectionStringBuilder connBuilder = new SQLiteConnectionStringBuilder();
+            connBuilder.DataSource = absolutePath;
+            connBuilder.Version = 3;
+            // enable write ahead logging
+            connBuilder.JournalMode = SQLiteJournalModeEnum.Wal;
+            connBuilder.LegacyFormat = false;
 
-            _sqliteConnection = new SQLiteConnection(connectionString);
+            _sqliteConnection = new SQLiteConnection(connBuilder.ToString());
             _sqliteConnection.Open();
         }
+
+        #region Initialize
+
+        public static void Initialize()
+        {
+            BeginTransaction();
+            CreateTables();
+            InitializeSensorTypeTable();
+            EndTransaction();
+        }
+
+        private static void CreateTables()
+        {
+            lock (s_lockObject)
+            {
+                List<String> createStatements = new List<String>()
+                {
+                    @"CREATE TABLE IF NOT EXISTS [Component] (
+                        [ComponentID] INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        [Name] VARCHAR(100)  NOT NULL,
+                        [Type] VARCHAR(25)  NOT NULL)",
+
+                    @"CREATE TABLE IF NOT EXISTS [Computer] (
+                        [ComputerID] INTEGER  PRIMARY KEY NOT NULL,
+                        [MACAddress] INTEGER  NOT NULL,
+                        [Username] VARCHAR(25)  NULL,
+                        [IPAddress] INTEGER  NOT NULL,
+                        [MachineName] VARCHAR(50)  NULL,
+                        [LastAccessTime] TIMESTAMP  NULL)",
+
+                    @"CREATE TABLE IF NOT EXISTS [ComputerComponent] (
+                        [ComputerComponentID] TEXT  NOT NULL PRIMARY KEY,
+                        [ComputerID] INTEGER  NOT NULL,
+                        [ComponentID] INTEGER  NOT NULL,
+                        [ParentComputerComponentID] TEXT  NULL)",
+
+                    @"CREATE TABLE IF NOT EXISTS HistoricalAggregation
+                        (ComponentID INTEGER,
+                        ComputerComponentID INTEGER,
+                        SensorTypeID INTEGER,
+                        [Date] TIMESTAMP,
+                        DateRange TIME,
+                        [Count] INTEGER,
+                        [Sum] REAL,
+                        SumOfSquares REAL,
+                        [Min] REAL,
+                        [Max] REAL,
+                        PRIMARY KEY (ComponentID, ComputerComponentID,
+                        SensorTypeID,
+                        [Date],DateRange))",
+
+                    @"CREATE TABLE IF NOT EXISTS [SensorData] (
+                        [ComputerComponentID] TEXT  NOT NULL,
+                        [Date] TIMESTAMP  NULL,
+                        [SensorID] TEXT  NULL,
+                        [SensorTypeID] INTEGER  NULL,
+                        [Value] REAL  NOT NULL,
+                        PRIMARY KEY ([ComputerComponentID],[Date],[SensorID],[SensorTypeID]))",
+
+                    @"CREATE TABLE IF NOT EXISTS [SensorType] (
+                        [SensorTypeID] TEXT  NOT NULL PRIMARY KEY,
+                        [Name] VARCHAR(25)  NOT NULL,
+                        [Units] VARCHAR(10)  NULL)",
+
+                    @"CREATE TABLE IF NOT EXISTS [User] (
+                        [Username] VARCHAR(25)  PRIMARY KEY NULL,
+                        [Name] VARCHAR(100)  NOT NULL,
+                        [LastAccessTime] TIMESTAMP  NULL)"
+                };
+
+                foreach (String statement in createStatements)
+                {
+                    using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                    {
+                        command.CommandText = statement;
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+
+        private static void InitializeSensorTypeTable()
+        {
+            lock (s_lockObject)
+            {
+                SQLiteDataReader reader;
+                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    command.CommandText = "SELECT * FROM SensorType";
+                    reader = command.ExecuteReader();
+
+                    if (reader.HasRows)
+                        return;
+                }
+
+                Dictionary<SensorType, String> sensorTypes = new Dictionary<SensorType, string>()
+                {
+                    {SensorType.Voltage, "V"},
+                    {SensorType.Clock, "MHz"},
+                    {SensorType.Temperature, "°C"},
+                    {SensorType.Load, "%"},
+                    {SensorType.Fan, "RPM"},
+                    {SensorType.Flow, "L/h"},
+                    {SensorType.Control, "%"},
+                    {SensorType.Level, "%"},
+                    {SensorType.Factor, "1"},
+                    {SensorType.Power, "W"},
+                    {SensorType.Data, "GB"},
+                };
+
+                const string c_insertSensorType = "INSERT INTO SensorType (SensorTypeID,Name,Units) values (@sensorTypeId,@name,@units)";
+                foreach (KeyValuePair<SensorType, String> pair in sensorTypes)
+                {
+                    using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                    {
+                        command.CommandText = c_insertSensorType;
+                        command.Parameters.Add(new SQLiteParameter("@sensorTypeId", pair.Key));
+                        command.Parameters.Add(new SQLiteParameter("@name", pair.Key.ToString()));
+                        command.Parameters.Add(new SQLiteParameter("@units", pair.Value));
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+
+        #endregion
 
         #region Get Methods
         public static long CurrentComputerId
@@ -285,6 +416,7 @@ namespace OpenHardwareMonitor.DAL
         #endregion
 
         #region Insert Methods
+
         public static void InsertUser(string userName, string name)
         {
             const string c_userExistsQuery = "SELECT Username FROM User WHERE Username = @userName";
@@ -321,24 +453,25 @@ namespace OpenHardwareMonitor.DAL
                     sqlInsertCommand.CommandText = c_insertUser;
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@userName", userName));
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@name", name));
-                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@lastAccessTime", ((int)(DateTime.UtcNow - s_unixEpoch).TotalSeconds)));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@lastAccessTime", DateTime.Now));
 
                     sqlInsertCommand.ExecuteNonQuery();
                 }
             }
         }
 
-        public static void InsertSensorData(long computerComponentId, long sensorTypeID, double value)
+        public static void InsertSensorData(String computerComponentId, String sensorID, int sensorTypeID, double value)
         {
             lock (s_lockObject)
             {
-                const string c_insertSensorData = "INSERT INTO SensorData (ComputerComponentID,Date,SensorTypeID,Value) values (@componentId,@date,@sensorTypeId,@Value)";
+                const string c_insertSensorData = "INSERT INTO SensorData (ComputerComponentID,Date,SensorID,SensorTypeID,Value) values (@componentId,@date,@sensorId,@sensorTypeId,@Value)";
 
                 using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
                     sqlInsertCommand.CommandText = c_insertSensorData;
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentId", computerComponentId));
-                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@date", ((int)(DateTime.UtcNow - s_unixEpoch).TotalSeconds)));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@date", DateTime.Now));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sensorId", sensorID));
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeID));
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@Value", value));
 
@@ -347,9 +480,7 @@ namespace OpenHardwareMonitor.DAL
             }
         }
 
-
-
-        public static void AddHardwareToDB(Hardware.IHardware hardware)
+        public static void AddHardware(Hardware.IHardware hardware)
         {
             lock (s_lockObject)
             {
@@ -416,6 +547,31 @@ namespace OpenHardwareMonitor.DAL
                 }
             }
         }
+
+        #endregion
+
+        #region Transactions
+
+        public static void BeginTransaction()
+        {
+            if (!s_transactionStarted)
+            {
+                SQLiteCommand command = new SQLiteCommand("begin", s_dataManager._sqliteConnection);
+                command.ExecuteNonQuery();
+                s_transactionStarted = true;
+            }
+        }
+
+        public static void EndTransaction()
+        {
+            if (s_transactionStarted)
+            {
+                SQLiteCommand command = new SQLiteCommand("end", s_dataManager._sqliteConnection);
+                command.ExecuteNonQuery();
+                s_transactionStarted = false;
+            }
+        }
+
         #endregion
     }
 }

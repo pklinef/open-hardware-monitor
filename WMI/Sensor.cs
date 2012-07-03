@@ -10,6 +10,8 @@
 
 using System.Management.Instrumentation;
 using OpenHardwareMonitor.Hardware;
+using OpenHardwareMonitor.DAL;
+using System;
 
 namespace OpenHardwareMonitor.WMI {
   [InstrumentationClass(InstrumentationType.Instance)]
@@ -41,13 +43,22 @@ namespace OpenHardwareMonitor.WMI {
     }
     
     public void Update() {
-      Value = (sensor.Value != null) ? (float)sensor.Value : 0;
+        if (sensor.Value != null) {
+            Value = (float)sensor.Value;
 
-      if (sensor.Min != null)
-        Min = (float)sensor.Min;
+            String computerComponentId = sensor.Hardware.Identifier.ToString();
+            String sensorId = sensor.Identifier.ToString().Remove(0, computerComponentId.Length);
 
-      if (sensor.Max != null)
-        Max = (float)sensor.Max;
+            DataManager.InsertSensorData(computerComponentId, sensorId, (int)sensor.SensorType, Value);
+        } else {
+            Value = 0;
+        }
+
+        if (sensor.Min != null)
+            Min = (float)sensor.Min;
+
+        if (sensor.Max != null)
+            Max = (float)sensor.Max;
     }
   }
 }
