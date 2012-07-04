@@ -76,6 +76,28 @@ namespace OpenHardwareMonitor.DAL
                         [ComponentID] INTEGER  NOT NULL,
                         [ParentComputerComponentID] TEXT  NULL)",
 
+                    @"CREATE TABLE IF NOT EXISTS [SensorType] (
+                        [SensorTypeID] TEXT  NOT NULL PRIMARY KEY,
+                        [Name] VARCHAR(25)  NOT NULL,
+                        [Units] VARCHAR(10)  NULL)",
+
+                    @"CREATE TABLE IF NOT EXISTS [ComponentSensor] (
+                        [ComponentSensorID] INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        [ComputerComponentID] TEXT NOT NULL,
+                        [SensorID] TEXT NOT NULL,
+                        [SensorTypeID] INTEGER NOT NULL)",
+
+                    @"CREATE TABLE IF NOT EXISTS [SensorData] (
+                        [ComponentSensorID] INTEGER  NOT NULL,
+                        [Date] TIMESTAMP  NULL,
+                        [Value] REAL  NOT NULL,
+                        PRIMARY KEY (ComponentSensorID, [Date]))",
+
+                    @"CREATE TABLE IF NOT EXISTS [User] (
+                        [Username] VARCHAR(25)  PRIMARY KEY NULL,
+                        [Name] VARCHAR(100)  NOT NULL,
+                        [LastAccessTime] TIMESTAMP  NULL)",
+
                     @"CREATE TABLE IF NOT EXISTS HistoricalAggregation
                         (ComponentID INTEGER,
                         ComputerComponentID INTEGER,
@@ -91,23 +113,6 @@ namespace OpenHardwareMonitor.DAL
                         SensorTypeID,
                         [Date],DateRange))",
 
-                    @"CREATE TABLE IF NOT EXISTS [SensorData] (
-                        [ComputerComponentID] TEXT  NOT NULL,
-                        [Date] TIMESTAMP  NULL,
-                        [SensorID] TEXT  NULL,
-                        [SensorTypeID] INTEGER  NULL,
-                        [Value] REAL  NOT NULL,
-                        PRIMARY KEY ([ComputerComponentID],[Date],[SensorID],[SensorTypeID]))",
-
-                    @"CREATE TABLE IF NOT EXISTS [SensorType] (
-                        [SensorTypeID] TEXT  NOT NULL PRIMARY KEY,
-                        [Name] VARCHAR(25)  NOT NULL,
-                        [Units] VARCHAR(10)  NULL)",
-
-                    @"CREATE TABLE IF NOT EXISTS [User] (
-                        [Username] VARCHAR(25)  PRIMARY KEY NULL,
-                        [Name] VARCHAR(100)  NOT NULL,
-                        [LastAccessTime] TIMESTAMP  NULL)"
                 };
 
                 foreach (String statement in createStatements)
@@ -460,19 +465,35 @@ namespace OpenHardwareMonitor.DAL
             }
         }
 
-        public static void InsertSensorData(String computerComponentId, String sensorID, int sensorTypeID, double value)
+        public static void InsertSensorData(String computerComponentId, String sensorId, int sensorTypeId, double value)
         {
             lock (s_lockObject)
             {
-                const string c_insertSensorData = "INSERT INTO SensorData (ComputerComponentID,Date,SensorID,SensorTypeID,Value) values (@componentId,@date,@sensorId,@sensorTypeId,@Value)";
+                Int64 componentSensorId = -1;
+                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    command.CommandText = "SELECT ComponentSensorID FROM ComponentSensor WHERE ComputerComponentID = @computerComponentId AND SensorID = @sensorId AND SensorTypeID = @sensorTypeId";
+                    command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
+                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
+                    command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
+                    SQLiteDataReader reader= command.ExecuteReader();
+
+                    if (reader.HasRows)
+                    {
+                        while (reader.Read())
+                            componentSensorId = Convert.ToInt64(reader["ComponentSensorID"]);
+                    }
+                    else
+                        return;
+                }
+
+                const string c_insertSensorData = "INSERT INTO SensorData (ComponentSensorID, Date, Value) values (@componentSensorId, @date, @Value)";
 
                 using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
                     sqlInsertCommand.CommandText = c_insertSensorData;
-                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentId", computerComponentId));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@date", DateTime.Now));
-                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sensorId", sensorID));
-                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeID));
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@Value", value));
 
                     sqlInsertCommand.ExecuteNonQuery();
@@ -484,6 +505,7 @@ namespace OpenHardwareMonitor.DAL
         {
             lock (s_lockObject)
             {
+                //lets check if this computer-component combo has already been added
                 SQLiteDataReader reader;
                 using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
@@ -496,8 +518,8 @@ namespace OpenHardwareMonitor.DAL
                         return;
                 }
                 
+                //has this hardware component been added before?
                 Int64 componentId = -1;
-
                 using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
                     command.CommandText = "SELECT ComponentID FROM Component WHERE Name = '@componentName' AND Type = '@componentType'";
@@ -513,8 +535,6 @@ namespace OpenHardwareMonitor.DAL
 
                     }
                 }
-
-
 
                 if (componentId == -1)
                 {
@@ -573,5 +593,35 @@ namespace OpenHardwareMonitor.DAL
         }
 
         #endregion
+
+        public static void RegisterSensor(string computerComponentId, string sensorId, int sensorTypeId)
+        {
+            lock (s_lockObject)
+            {
+                //lets check if this sensor has already been registered
+                SQLiteDataReader reader;
+                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+
+                    command.CommandText = "SELECT * FROM ComponentSensor WHERE ComputerComponentID = @computerComponentId AND SensorID = @sensorId AND SensorTypeID = @sensorTypeId";
+                    command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
+                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
+                    command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
+                    reader = command.ExecuteReader();
+
+                    if (reader.HasRows)
+                        return;
+                }
+
+                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    command.CommandText = "INSERT INTO ComponentSensor (ComputerComponentID, SensorID, SensorTypeID) values (@computerComponentId, @sensorId, @sensorTypeId)";
+                    command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
+                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
+                    command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
     }
 }

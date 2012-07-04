@@ -53,17 +53,23 @@ namespace OpenHardwareMonitor.WMI {
     
     private void ComputerHardwareAdded(IHardware hardware) {
       if (!Exists(hardware.Identifier.ToString())) {
+        DataManager.AddHardware(hardware);
+
         foreach (ISensor sensor in hardware.Sensors)
-          HardwareSensorAdded(sensor);
+        {
+
+            String computerComponentId = hardware.Identifier.ToString();
+            String sensorId = sensor.Identifier.ToString().Remove(0, computerComponentId.Length);
+            DataManager.RegisterSensor(computerComponentId, sensorId, (int)sensor.SensorType);
+
+            HardwareSensorAdded(sensor);
+        }
 
         hardware.SensorAdded += HardwareSensorAdded;
         hardware.SensorRemoved += HardwareSensorRemoved;
 
         Hardware hw = new Hardware(hardware);
         activeInstances.Add(hw);
-        
-        DataManager.AddHardware(hardware);
-
         try {
           Instrumentation.Publish(hw);
         } catch (Exception) { }
@@ -76,7 +82,6 @@ namespace OpenHardwareMonitor.WMI {
     private void HardwareSensorAdded(ISensor data) {
       Sensor sensor = new Sensor(data);
       activeInstances.Add(sensor);
-
       try {
         Instrumentation.Publish(sensor);
       } catch (Exception) { }
