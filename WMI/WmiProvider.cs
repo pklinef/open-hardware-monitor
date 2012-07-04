@@ -57,11 +57,6 @@ namespace OpenHardwareMonitor.WMI {
 
         foreach (ISensor sensor in hardware.Sensors)
         {
-
-            String computerComponentId = hardware.Identifier.ToString();
-            String sensorId = sensor.Identifier.ToString().Remove(0, computerComponentId.Length);
-            DataManager.RegisterSensor(computerComponentId, sensorId, (int)sensor.SensorType);
-
             HardwareSensorAdded(sensor);
         }
 
@@ -80,6 +75,11 @@ namespace OpenHardwareMonitor.WMI {
     }
 
     private void HardwareSensorAdded(ISensor data) {
+
+      String computerComponentId = data.Hardware.Identifier.ToString();
+      String sensorId = data.Identifier.ToString().Remove(0, computerComponentId.Length);
+      DataManager.RegisterSensor(computerComponentId, sensorId, data.Name, (int)data.SensorType);
+
       Sensor sensor = new Sensor(data);
       activeInstances.Add(sensor);
       try {

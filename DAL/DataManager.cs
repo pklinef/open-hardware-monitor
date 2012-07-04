@@ -85,6 +85,7 @@ namespace OpenHardwareMonitor.DAL
                         [ComponentSensorID] INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
                         [ComputerComponentID] TEXT NOT NULL,
                         [SensorID] TEXT NOT NULL,
+                        [SensorName] TEXT NOT NULL,
                         [SensorTypeID] INTEGER NOT NULL)",
 
                     @"CREATE TABLE IF NOT EXISTS [SensorData] (
@@ -568,6 +569,37 @@ namespace OpenHardwareMonitor.DAL
             }
         }
 
+        public static void RegisterSensor(string computerComponentId, string sensorId, string sensorName, int sensorTypeId)
+        {
+            lock (s_lockObject)
+            {
+                //lets check if this sensor has already been registered
+                SQLiteDataReader reader;
+                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+
+                    command.CommandText = "SELECT * FROM ComponentSensor WHERE ComputerComponentID = @computerComponentId AND SensorID = @sensorId AND SensorTypeID = @sensorTypeId";
+                    command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
+                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
+                    command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
+                    reader = command.ExecuteReader();
+
+                    if (reader.HasRows)
+                        return;
+                }
+
+                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    command.CommandText = "INSERT INTO ComponentSensor (ComputerComponentID, SensorID, SensorName, SensorTypeID) values (@computerComponentId, @sensorId, @sensorName, @sensorTypeId)";
+                    command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
+                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
+                    command.Parameters.Add(new SQLiteParameter("@sensorName", sensorName));  
+                    command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
         #endregion
 
         #region Transactions
@@ -594,34 +626,5 @@ namespace OpenHardwareMonitor.DAL
 
         #endregion
 
-        public static void RegisterSensor(string computerComponentId, string sensorId, int sensorTypeId)
-        {
-            lock (s_lockObject)
-            {
-                //lets check if this sensor has already been registered
-                SQLiteDataReader reader;
-                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
-                {
-
-                    command.CommandText = "SELECT * FROM ComponentSensor WHERE ComputerComponentID = @computerComponentId AND SensorID = @sensorId AND SensorTypeID = @sensorTypeId";
-                    command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
-                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
-                    command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
-                    reader = command.ExecuteReader();
-
-                    if (reader.HasRows)
-                        return;
-                }
-
-                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
-                {
-                    command.CommandText = "INSERT INTO ComponentSensor (ComputerComponentID, SensorID, SensorTypeID) values (@computerComponentId, @sensorId, @sensorTypeId)";
-                    command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
-                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
-                    command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
-                    command.ExecuteNonQuery();
-                }
-            }
-        }
     }
 }
