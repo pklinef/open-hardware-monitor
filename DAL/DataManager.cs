@@ -12,6 +12,13 @@ using OpenHardwareMonitor.Hardware;
 
 namespace OpenHardwareMonitor.DAL
 {
+    public class DataManagerData
+    {
+        public DateTime TimeStamp { get; set; }
+        public TimeSpan TimeSpan { get; set; }
+        public double Measure { get; set; }
+    }
+
     public class DataManager
     {
         private static Object s_lockObject = new Object();
@@ -20,6 +27,10 @@ namespace OpenHardwareMonitor.DAL
         private static DataManager s_dataManager = new DataManager();
         private static Boolean s_transactionStarted = false;
         private static long s_macAddress = -1;
+
+        // Items for aggregation. We'll aggregate to the hour and day
+        private static DateTime s_lastHourAggregation = DateTime.MinValue;
+        private static DateTime s_lastDayAggregation = DateTime.MinValue;
 
         private DataManager()
         {
@@ -71,10 +82,11 @@ namespace OpenHardwareMonitor.DAL
                         [LastAccessTime] TIMESTAMP  NULL)",
 
                     @"CREATE TABLE IF NOT EXISTS [ComputerComponent] (
-                        [ComputerComponentID] TEXT  NOT NULL PRIMARY KEY,
+                        [ComputerComponentID] TEXT  NOT NULL,
                         [ComputerID] INTEGER  NOT NULL,
                         [ComponentID] INTEGER  NOT NULL,
-                        [ParentComputerComponentID] TEXT  NULL)",
+                        [ParentComputerComponentID] TEXT  NULL,
+                        PRIMARY KEY (ComputerComponentID, ComputerID))",
 
                     @"CREATE TABLE IF NOT EXISTS [SensorType] (
                         [SensorTypeID] TEXT  NOT NULL PRIMARY KEY,
@@ -84,6 +96,7 @@ namespace OpenHardwareMonitor.DAL
                     @"CREATE TABLE IF NOT EXISTS [ComponentSensor] (
                         [ComponentSensorID] INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
                         [ComputerComponentID] TEXT NOT NULL,
+                        [ComputerID] INTEGER NOT NULL,
                         [SensorID] TEXT NOT NULL,
                         [SensorName] TEXT NOT NULL,
                         [SensorTypeID] INTEGER NOT NULL)",
@@ -100,18 +113,15 @@ namespace OpenHardwareMonitor.DAL
                         [LastAccessTime] TIMESTAMP  NULL)",
 
                     @"CREATE TABLE IF NOT EXISTS HistoricalAggregation
-                        (ComponentID INTEGER,
-                        ComputerComponentID INTEGER,
-                        SensorTypeID INTEGER,
+                        (ComponentSensorID INTEGER,
                         [Date] TIMESTAMP,
-                        DateRange TIME,
+                        DateRange INTEGER,
                         [Count] INTEGER,
                         [Sum] REAL,
                         SumOfSquares REAL,
                         [Min] REAL,
                         [Max] REAL,
-                        PRIMARY KEY (ComponentID, ComputerComponentID,
-                        SensorTypeID,
+                        PRIMARY KEY (ComponentSensorID,
                         [Date],DateRange))",
 
                 };
@@ -174,6 +184,113 @@ namespace OpenHardwareMonitor.DAL
         #endregion
 
         #region Get Methods
+
+        public static List<DataManagerData> GetDataForSensor(long componentSensorId, DateTime startTime, TimeSpan timeRange, out double average, out double min, out double max, out double stddev)
+        {
+            max = Double.MinValue;
+            min = Double.MaxValue;
+            average = 0;
+            stddev = 0;
+
+            double sum = 0;
+            double sumOfSquares = 0;
+            long count = 0;
+
+            List<DataManagerData> retVal = new List<DataManagerData>();
+
+            lock (s_lockObject)
+            {
+                DateTime timeCutoff = RoundDownToHour(DateTime.UtcNow.AddHours(-1));
+                
+                // Let's see if we need to grab the historical data
+                if (startTime < timeCutoff)
+                {
+                    const string c_selecttHistoricalData = "SELECT Count,Sum,DateRange,Date,SumOfSquares,Min,Max FROM HistoricalAggregation WHERE ComponentSensorID = @componentSensorId AND Date >= @minDate AND Date < @maxDate ORDER BY Date ASC, DateRange DESC";
+
+                    // If the row already exists, we need to add the data together
+                    using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                    {
+                        sqlSelectCommand.CommandText = c_selecttHistoricalData;
+                        sqlSelectCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
+                        sqlSelectCommand.Parameters.Add(new SQLiteParameter("@minDate", startTime));
+
+                        // Only pull coarse grain info up to the cutoff. We have fine grained info above the cutoff
+                        DateTime maxDate = (startTime + timeRange < timeCutoff) ? startTime + timeRange : timeCutoff;
+                        sqlSelectCommand.Parameters.Add(new SQLiteParameter("@maxDate", maxDate));
+
+                        using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                DataManagerData data = new DataManagerData();
+                                switch ((DateRangeType)Convert.ToInt32(reader["DateRange"]))
+                                {
+                                    case DateRangeType.hour:
+                                        data.TimeSpan = TimeSpan.FromHours(1);
+                                        break;
+                                    case DateRangeType.day:
+                                    default:
+                                        data.TimeSpan = TimeSpan.FromDays(1);
+                                        break;
+                                }
+                                data.TimeStamp = Convert.ToDateTime(reader["Date"]);
+
+                                // We'll always assume Count != 0 for this project
+                                data.Measure = Convert.ToDouble(reader["Sum"]) / (double)(Convert.ToInt64(reader["Count"]));
+                                retVal.Add(data);
+
+                                min = Math.Min(min, Convert.ToDouble(reader["Min"]));
+                                max = Math.Max(max, Convert.ToDouble(reader["Max"]));
+                                sumOfSquares += Convert.ToDouble(reader["SumOfSquares"]);
+                                sum += Convert.ToDouble(reader["Sum"]);
+                                count += Convert.ToInt64(reader["Count"]);
+                            }
+                        }
+                    }
+                }
+
+                // Let's see if we need to grab from the fine grain data
+                if (startTime + timeRange > timeCutoff)
+                {
+                    const string c_selectSensorData = "SELECT Date,Value FROM SensorData WHERE Date < @maxTime AND Date >= @minTime AND ComponentSensorId = @componentSensorId ORDER BY Date ASC";
+
+                    using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                    {
+                        sqlSelectCommand.CommandText = c_selectSensorData;
+                        sqlSelectCommand.Parameters.Add(new SQLiteParameter("@minTime", startTime));
+                        sqlSelectCommand.Parameters.Add(new SQLiteParameter("@maxTime", startTime + timeRange));
+                        sqlSelectCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
+
+                        using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                DataManagerData data = new DataManagerData();
+                                data.TimeSpan = TimeSpan.FromSeconds(1);
+                                data.TimeStamp = Convert.ToDateTime(reader["Date"]);
+                                data.Measure = Convert.ToDouble(reader["Value"]);
+                                retVal.Add(data);
+
+                                min = Math.Min(min, data.Measure);
+                                max = Math.Max(max, data.Measure);
+                                sumOfSquares += data.Measure * data.Measure;
+                                sum += data.Measure;
+                                count++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (count > 0)
+            {
+                average = sum / count;
+                stddev = Math.Sqrt((sumOfSquares / count) - (average * average));
+            }
+
+            return retVal;
+        }
+
         public static long CurrentComputerId
         {
             get
@@ -459,24 +576,92 @@ namespace OpenHardwareMonitor.DAL
                     sqlInsertCommand.CommandText = c_insertUser;
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@userName", userName));
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@name", name));
-                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@lastAccessTime", DateTime.Now));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@lastAccessTime", DateTime.UtcNow));
 
                     sqlInsertCommand.ExecuteNonQuery();
                 }
             }
         }
 
-        public static void InsertSensorData(String computerComponentId, String sensorId, int sensorTypeId, double value)
+        private static void InsertHistoricalData(long componentSensorId, DateTime measureTime, DateRangeType dateRangeType, long count, double sum, double sumOfSquares, double min, double max)
         {
+            const string c_selecttHistoricalData = "SELECT Count,Sum,SumOfSquares,Min,Max FROM HistoricalAggregation WHERE ComponentSensorID = @componentSensorId AND Date = @date AND DateRange = @dateRange";
+
+            bool alreadyExists = false;
+
+            // If the row already exists, we need to add the data together
+            using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+            {
+                sqlSelectCommand.CommandText = c_selecttHistoricalData;
+                sqlSelectCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
+                sqlSelectCommand.Parameters.Add(new SQLiteParameter("@date", measureTime));
+                sqlSelectCommand.Parameters.Add(new SQLiteParameter("@dateRange", dateRangeType));
+
+                using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        alreadyExists = true;
+                        count += Convert.ToInt64(reader["Count"]);
+                        sum += Convert.ToDouble(reader["Sum"]);
+                        sumOfSquares += Convert.ToDouble(reader["SumOfSquares"]);
+                        double tempMin = Convert.ToDouble(reader["Min"]);
+                        min = Math.Min(min, tempMin);
+                        double tempMax = Convert.ToDouble(reader["Max"]);
+                        max = Math.Max(max, tempMax);
+                    }
+                }
+            }
+
+            // If a row does already exist, it's equivalent and easier to delete and reinsert rather than update since
+            // we're updating most of the row. This can almost never happen
+            if (alreadyExists)
+            {
+                const string c_deleteSensorData = "DELETE FROM HistoricalAggregation WHERE ComponentSensorID = @componentSensorId AND Date = @date AND DateRange = @dateRange";
+                using (SQLiteCommand sqlDeleteCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    sqlDeleteCommand.CommandText = c_deleteSensorData;
+
+                    sqlDeleteCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
+                    sqlDeleteCommand.Parameters.Add(new SQLiteParameter("@date", measureTime));
+                    sqlDeleteCommand.Parameters.Add(new SQLiteParameter("@dateRange", dateRangeType));
+
+
+                    sqlDeleteCommand.ExecuteNonQuery();
+                }
+            }
+
+            const string c_insertHistoricalData = "INSERT INTO HistoricalAggregation (ComponentSensorID,Date,DateRange,Count,Sum,SumOfSquares,Min,Max) values (@componentSensorId,@date,@dateRange,@count,@sum,@sumOfSquares,@min,@max)";
+
+            using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+            {
+                sqlInsertCommand.CommandText = c_insertHistoricalData;
+                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
+                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@date", measureTime));
+                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@dateRange", dateRangeType));
+                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@count", count));
+                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sum", sum));
+                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sumOfSquares", sumOfSquares));
+                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@min", min));
+                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@max", max));
+
+                sqlInsertCommand.ExecuteNonQuery();
+            }
+        }
+
+        public static void InsertSensorData(String computerComponentId, String sensorID, int sensorTypeID, double value)
+        {
+            AggregateHistoricalData();
             lock (s_lockObject)
             {
                 Int64 componentSensorId = -1;
                 using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
-                    command.CommandText = "SELECT ComponentSensorID FROM ComponentSensor WHERE ComputerComponentID = @computerComponentId AND SensorID = @sensorId AND SensorTypeID = @sensorTypeId";
+                    command.CommandText = "SELECT ComponentSensorID FROM ComponentSensor WHERE ComputerComponentID = @computerComponentId AND SensorID = @sensorId AND SensorTypeID = @sensorTypeId AND ComputerID = @computerID";
                     command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
-                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
-                    command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
+                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorID));  
+                    command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeID));
+                    command.Parameters.Add(new SQLiteParameter("@computerID", CurrentComputerId));
                     SQLiteDataReader reader= command.ExecuteReader();
 
                     if (reader.HasRows)
@@ -494,7 +679,7 @@ namespace OpenHardwareMonitor.DAL
                 {
                     sqlInsertCommand.CommandText = c_insertSensorData;
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
-                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@date", DateTime.Now));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@date", DateTime.UtcNow));
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@Value", value));
 
                     sqlInsertCommand.ExecuteNonQuery();
@@ -511,8 +696,9 @@ namespace OpenHardwareMonitor.DAL
                 using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
 
-                    command.CommandText = "SELECT * FROM ComputerComponent WHERE ComputerComponentID = @computerComponentId";
+                    command.CommandText = "SELECT * FROM ComputerComponent WHERE ComputerComponentID = @computerComponentId AND ComputerID = @computerID";
                     command.Parameters.Add(new SQLiteParameter("@computerComponentId", hardware.Identifier.ToString()));
+                    command.Parameters.Add(new SQLiteParameter("@computerID", CurrentComputerId));
                     reader = command.ExecuteReader();
 
                     if (reader.HasRows)
@@ -561,13 +747,15 @@ namespace OpenHardwareMonitor.DAL
                 {
                     command.CommandText = "INSERT INTO ComputerComponent (ComputerComponentID, ComputerID, ComponentID, ParentComputerComponentID) values (@computerComponentId, @computerId, @componentId, @parentComputerComponentId)";
                     command.Parameters.Add(new SQLiteParameter("@computerComponentId", hardware.Identifier.ToString()));
-                    command.Parameters.Add(new SQLiteParameter("@computerId", 1));  //NOTE: hard coded!!!
+                    command.Parameters.Add(new SQLiteParameter("@computerId", CurrentComputerId));  //NOTE: hard coded!!!
                     command.Parameters.Add(new SQLiteParameter("@componentId", componentId));
                     command.Parameters.Add(new SQLiteParameter("@parentComputerComponentId", (hardware.Parent == null?"":hardware.Parent.Identifier.ToString())));
                     command.ExecuteNonQuery();
                 }
             }
         }
+
+        #endregion
 
         public static void RegisterSensor(string computerComponentId, string sensorId, string sensorName, int sensorTypeId)
         {
@@ -578,9 +766,10 @@ namespace OpenHardwareMonitor.DAL
                 using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
 
-                    command.CommandText = "SELECT * FROM ComponentSensor WHERE ComputerComponentID = @computerComponentId AND SensorID = @sensorId AND SensorTypeID = @sensorTypeId";
+                    command.CommandText = "INSERT INTO ComponentSensor (ComputerComponentID, SensorID, SensorName, SensorTypeID) values (@computerComponentId, @sensorId, @sensorName, @sensorTypeId)";
                     command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
-                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
+                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));
+                    command.Parameters.Add(new SQLiteParameter("@sensorName", sensorName));
                     command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
                     reader = command.ExecuteReader();
 
@@ -590,16 +779,234 @@ namespace OpenHardwareMonitor.DAL
 
                 using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
-                    command.CommandText = "INSERT INTO ComponentSensor (ComputerComponentID, SensorID, SensorName, SensorTypeID) values (@computerComponentId, @sensorId, @sensorName, @sensorTypeId)";
+                    command.CommandText = "INSERT INTO ComponentSensor (ComputerComponentID, SensorID, SensorTypeID, ComputerID) values (@computerComponentId, @sensorId, @sensorTypeId, @computerID)";
                     command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
                     command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
-                    command.Parameters.Add(new SQLiteParameter("@sensorName", sensorName));  
                     command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
+                    command.Parameters.Add(new SQLiteParameter("@computerID", CurrentComputerId));
                     command.ExecuteNonQuery();
                 }
             }
         }
 
+        #region Helper Methods
+        private static DateTime RoundDownToHour(DateTime dt)
+        {
+            DateTime retVal = new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, 0, 0, DateTimeKind.Utc);
+            return retVal;
+        }
+
+        private static DateTime RoundDownToDay(DateTime dt)
+        {
+            return dt.Date;
+        }
+
+        private enum DateRangeType
+        {
+            // Let's give ourselves some room
+            hour = 6,
+            day = 10,
+        }
+
+        public static void AggregateHistoricalData()
+        {
+            DateTime currentTime = DateTime.UtcNow;
+
+            // We'll check the hour aggregation, since the day aggregation can only be triggered when the hour one is also triggered
+            if (s_lastHourAggregation < (currentTime.AddHours(-1)))
+            {
+                lock (s_lockObject)
+                {
+                    if (s_lastHourAggregation < (currentTime.AddHours(-1)))
+                    {
+                        DateTime hourFloorTime = RoundDownToHour(currentTime);
+
+                        const string c_selectSensorData = "SELECT ComponentSensorID,Date,Value FROM SensorData WHERE Date < @minTime ORDER BY ComponentSensorID ASC, Date ASC";
+
+                        using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                        {
+                            sqlSelectCommand.CommandText = c_selectSensorData;
+                            sqlSelectCommand.Parameters.Add(new SQLiteParameter("@minTime", hourFloorTime.AddHours(-1)));
+
+                            using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
+                            {
+                                long currentComponentSensorId = -1;
+                                DateTime currentHourCutoff = DateTime.MinValue;
+
+                                DateTime currentHour = DateTime.MinValue;
+                                double sum = 0;
+                                double max = 0;
+                                double min = 0;
+                                double sumOfSquares = 0;
+                                long count = 0;
+
+                                while (reader.Read())
+                                {
+                                    long componentSensorId = Convert.ToInt64(reader["ComponentSensorID"]);
+                                    DateTime measureTime = Convert.ToDateTime(reader["Date"]);
+                                    double measure = Convert.ToDouble(reader["Value"]);
+
+                                    if (currentComponentSensorId != componentSensorId ||
+                                        measureTime > currentHourCutoff)
+                                    {
+                                        // We don't want to save anything back if we're setting up
+                                        if (currentComponentSensorId != -1)
+                                        {
+                                            InsertHistoricalData(currentComponentSensorId,
+                                                currentHour,
+                                                DateRangeType.hour,
+                                                count,
+                                                sum,
+                                                sumOfSquares,
+                                                min,
+                                                max);
+                                        }
+
+                                        // Reset our aggregation
+                                        currentComponentSensorId = componentSensorId;
+                                        currentHour = RoundDownToHour(measureTime);
+                                        currentHourCutoff = currentHour.AddHours(1);
+                                        max = measure;
+                                        min = measure;
+                                        count = 0;
+                                        sum = 0;
+                                        sumOfSquares = 0;
+                                    }
+
+                                    max = Math.Max(max, measure);
+                                    min = Math.Min(min, measure);
+                                    count++;
+                                    sum += measure;
+                                    sumOfSquares += (measure * measure);
+                                }
+
+                                // Save the last set of measures. We don't want to save anything back if we're setting up
+                                if (currentComponentSensorId != -1)
+                                {
+                                    InsertHistoricalData(currentComponentSensorId,
+                                        currentHour,
+                                        DateRangeType.hour,
+                                        count,
+                                        sum,
+                                        sumOfSquares,
+                                        min,
+                                        max);
+                                }
+                            }
+                        }
+
+                        const string c_deleteSensorData = "DELETE FROM SensorData WHERE Date < @minTime";
+                        using (SQLiteCommand sqlDeleteCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                        {
+                            sqlDeleteCommand.CommandText = c_deleteSensorData;
+
+                            // Always make sure we have one full hour of full resolution
+                            sqlDeleteCommand.Parameters.Add(new SQLiteParameter("@minTime", hourFloorTime.AddHours(-1)));
+
+                            sqlDeleteCommand.ExecuteNonQuery();
+                        }
+
+                        s_lastHourAggregation = hourFloorTime;
+                    }
+
+                    if (s_lastDayAggregation < (currentTime.AddDays(-1)))
+                    {
+                        DateTime dayFloorTime = RoundDownToDay(currentTime);
+
+                        const string c_selecttHistoricalData = "SELECT ComponentSensorID,Date,Count,Sum,SumOfSquares,Min,Max FROM HistoricalAggregation WHERE Date < @date AND DateRange = @dateRange ORDER BY ComponentSensorID ASC, Date ASC";
+
+                        // If the row already exists, we need to add the data together
+                        using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                        {
+                            sqlSelectCommand.CommandText = c_selecttHistoricalData;
+                            sqlSelectCommand.Parameters.Add(new SQLiteParameter("@date", dayFloorTime.AddDays(-1)));
+                            sqlSelectCommand.Parameters.Add(new SQLiteParameter("@dateRange", DateRangeType.hour));
+
+                            using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
+                            {
+                                long currentComponentSensorId = -1;
+                                DateTime currentDayCutoff = DateTime.MinValue;
+
+                                DateTime currentDay = DateTime.MinValue;
+                                double sum = 0;
+                                double max = 0;
+                                double min = 0;
+                                double sumOfSquares = 0;
+                                long count = 0;
+
+                                while (reader.Read())
+                                {
+                                    long componentSensorId = Convert.ToInt64(reader["ComponentSensorID"]);
+                                    DateTime measureTime = Convert.ToDateTime(reader["Date"]);
+
+                                    if (currentComponentSensorId != componentSensorId ||
+                                        measureTime > currentDayCutoff)
+                                    {
+                                        // We don't want to save anything back if we're setting up
+                                        if (currentComponentSensorId != -1)
+                                        {
+                                            InsertHistoricalData(currentComponentSensorId,
+                                                currentDay,
+                                                DateRangeType.day,
+                                                count,
+                                                sum,
+                                                sumOfSquares,
+                                                min,
+                                                max);
+                                        }
+
+                                        // Reset our aggregation
+                                        currentComponentSensorId = componentSensorId;
+                                        currentDay = RoundDownToDay(measureTime);
+                                        currentDayCutoff = currentDay.AddHours(1);
+                                        max = Convert.ToDouble(reader["Max"]);
+                                        min = Convert.ToDouble(reader["Min"]);
+                                        count = 0;
+                                        sum = 0;
+                                        sumOfSquares = 0;
+                                    }
+
+                                    count += Convert.ToInt64(reader["Count"]);
+                                    sum += Convert.ToDouble(reader["Sum"]);
+                                    sumOfSquares += Convert.ToDouble(reader["SumOfSquares"]);
+                                    double tempMin = Convert.ToDouble(reader["Min"]);
+                                    min = Math.Min(min, tempMin);
+                                    double tempMax = Convert.ToDouble(reader["Max"]);
+                                    max = Math.Max(max, tempMax);
+                                }
+
+                                // Save the last set of measures. We don't want to save anything back if we're setting up
+                                if (currentComponentSensorId != -1)
+                                {
+                                    InsertHistoricalData(currentComponentSensorId,
+                                        currentDay,
+                                        DateRangeType.day,
+                                        count,
+                                        sum,
+                                        sumOfSquares,
+                                        min,
+                                        max);
+                                }
+                            }
+                        }
+
+                        const string c_deleteSensorData = "DELETE FROM HistoricalAggregation WHERE Date < @date AND DateRange = @dateRange";
+                        using (SQLiteCommand sqlDeleteCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                        {
+                            sqlDeleteCommand.CommandText = c_deleteSensorData;
+
+                            // Always make sure we have one full day of hour resolution
+                            sqlDeleteCommand.Parameters.Add(new SQLiteParameter("@date", dayFloorTime.AddDays(-1)));
+                            sqlDeleteCommand.Parameters.Add(new SQLiteParameter("@dateRange", DateRangeType.hour));
+
+                            sqlDeleteCommand.ExecuteNonQuery();
+                        }
+
+                        s_lastDayAggregation = dayFloorTime;
+                    }
+                }
+            }
+        }
         #endregion
 
         #region Transactions
@@ -625,6 +1032,5 @@ namespace OpenHardwareMonitor.DAL
         }
 
         #endregion
-
     }
 }

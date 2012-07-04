@@ -56,7 +56,7 @@ namespace OpenHardwareMonitor.Utilities
                     listenerThread.Start();
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return false;
             }
@@ -72,16 +72,16 @@ namespace OpenHardwareMonitor.Utilities
                 listener.Stop();
                 listenerThread = null;
             }
-            catch (System.Net.HttpListenerException e)
+            catch (System.Net.HttpListenerException)
             {
             }
-            catch (System.Threading.ThreadAbortException e)
+            catch (System.Threading.ThreadAbortException)
             {
             }
-            catch (System.NullReferenceException e)
+            catch (System.NullReferenceException)
             {
             }
-            catch (Exception e)
+            catch (Exception)
             {
             }
             return true;
