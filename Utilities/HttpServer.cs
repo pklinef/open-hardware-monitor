@@ -113,6 +113,12 @@ namespace OpenHardwareMonitor.Utilities
                 return;
             }
 
+            if (requestedFile == "tree.json")
+            {
+                SendTreeJSON(context);
+                return;
+            }
+
             if (requestedFile.Contains("images_icon"))
             {
                 serveResourceImage(context, requestedFile.Replace("images_icon/", ""));
@@ -253,6 +259,79 @@ namespace OpenHardwareMonitor.Utilities
             JSON += "}";
             return JSON;
         }
+
+        private void SendTreeJSON(HttpListenerContext context)
+        {
+
+            string JSON = "{[\"id\": 0, \"Text\": \"Sensor\", \"Parent\":\"\"";
+            JSON += ", \"sid\": \"Sensor ID\"";
+            JSON += ", \"cid\": \"Component ID\"";
+            JSON += ", \"Name\": \"Name\"";
+            JSON += ", \"Type\": \"Type\"";
+            JSON += ", \"ImageURL\": \"\"";
+            JSON += "]";
+            nodeCount = 1;
+            JSON += GenerateTreeJSON(root, 0);
+            JSON += "}";
+
+            var responseContent = JSON;
+            byte[] buffer = Encoding.UTF8.GetBytes(responseContent);
+
+            context.Response.ContentLength64 = buffer.Length;
+            context.Response.ContentType = "application/json";
+
+            Stream outputStream = context.Response.OutputStream;
+            outputStream.Write(buffer, 0, buffer.Length);
+            outputStream.Close();
+
+        }
+
+        private string GenerateTreeJSON(Node n, int parentID)
+        {
+            string JSON = ", [\"id\": " + nodeCount + ", \"Text\": \"" + n.Text + "\", \"Parent\": " + parentID;
+            int currentId = nodeCount;
+            nodeCount++;
+            if (n is SensorNode)
+            {
+                String computerComponentId = ((SensorNode)n).Sensor.Hardware.Identifier.ToString();
+                String sensorId = ((SensorNode)n).Sensor.Identifier.ToString().Remove(0, computerComponentId.Length);
+                JSON += ", \"sid\": \"" + sensorId + "\"";
+                JSON += ", \"cid\": \"" + computerComponentId + "\"";
+                JSON += ", \"Name\": \"" + ((SensorNode)n).Text + "\"";
+                JSON += ", \"Type\": \"" + ((SensorNode)n).Sensor.SensorType.ToString() + "\"";
+                JSON += ", \"ImageURL\": \"images/transparent.png\"";
+            }
+            else if (n is HardwareNode)
+            {
+                JSON += ", \"sid\": \"\"";
+                JSON += ", \"cid\": \"\"";
+                JSON += ", \"Name\": \"\"";
+                JSON += ", \"Type\": \"\"";
+                JSON += ", \"ImageURL\": \"images_icon/" + getHardwareImageFile((HardwareNode)n) + "\"";
+            }
+            else if (n is TypeNode)
+            {
+                JSON += ", \"sid\": \"\"";
+                JSON += ", \"cid\": \"\"";
+                JSON += ", \"Name\": \"\"";
+                JSON += ", \"Type\": \"\"";
+                JSON += ", \"ImageURL\": \"images_icon/" + getTypeImageFile((TypeNode)n) + "\"";
+            }
+            else
+            {
+                JSON += ", \"sid\": \"\"";
+                JSON += ", \"cid\": \"\"";
+                JSON += ", \"Name\": \"\"";
+                JSON += ", \"Type\": \"\"";
+                JSON += ", \"ImageURL\": \"images_icon/computer.png\"";
+            }
+
+            JSON += "]";
+            foreach (Node child in n.Nodes)
+                JSON += GenerateTreeJSON(child, currentId);
+            return JSON;
+        }
+
 
         private static void returnFile(HttpListenerContext context, string filePath)
         {
