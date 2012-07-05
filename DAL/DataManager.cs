@@ -59,6 +59,7 @@ namespace OpenHardwareMonitor.DAL
             BeginTransaction();
             CreateTables();
             InitializeSensorTypeTable();
+            GetComputerId(GetMacAddress);
             EndTransaction();
         }
 
@@ -74,7 +75,7 @@ namespace OpenHardwareMonitor.DAL
                         [Type] VARCHAR(25)  NOT NULL)",
 
                     @"CREATE TABLE IF NOT EXISTS [Computer] (
-                        [ComputerID] INTEGER  PRIMARY KEY NOT NULL,
+                        [ComputerID] INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
                         [MACAddress] INTEGER  NOT NULL,
                         [Username] VARCHAR(25)  NULL,
                         [IPAddress] INTEGER  NOT NULL,
@@ -291,7 +292,7 @@ namespace OpenHardwareMonitor.DAL
             return retVal;
         }
 
-        public static long CurrentComputerId
+        public static long GetMacAddress
         {
             get
             {
@@ -405,7 +406,7 @@ namespace OpenHardwareMonitor.DAL
                     const string c_getCompoenntIdQuery = "SELECT ComputerComponentID FROM ComputerComponent WHERE ComputerID = @computerId and ComponentID = @componentId and ParentComputerComponentID = @parentComponentId";
 
                     sqlQueryCommand.CommandText = c_getCompoenntIdQuery;
-                    sqlQueryCommand.Parameters.Add(new SQLiteParameter("@computerId", CurrentComputerId));
+                    sqlQueryCommand.Parameters.Add(new SQLiteParameter("@computerId", GetComputerId(GetMacAddress)));
                     sqlQueryCommand.Parameters.Add(new SQLiteParameter("@componentId", componentId));
                     sqlQueryCommand.Parameters.Add(new SQLiteParameter("@parentComponentId", parentComponentId));
 
@@ -429,7 +430,7 @@ namespace OpenHardwareMonitor.DAL
                     using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
                     {
                         sqlInsertCommand.CommandText = c_insertComponent;
-                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@computerId", CurrentComputerId));
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@computerId", GetComputerId(GetMacAddress)));
                         sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentId", componentId));
                         sqlInsertCommand.Parameters.Add(new SQLiteParameter("@parentComponentId", parentComponentId));
 
@@ -493,7 +494,7 @@ namespace OpenHardwareMonitor.DAL
             return sensorTypeId;
         }
 
-        public static long GetComputerId(int macAddress)
+        public static long GetComputerId(long macAddress)
         {
             if (macAddress <= 0)
             {
@@ -514,7 +515,7 @@ namespace OpenHardwareMonitor.DAL
                     {
                         while (reader.Read())
                         {
-                            computerId = Convert.ToInt64(reader["SensorTypeID"]);
+                            computerId = Convert.ToInt64(reader["ComputerID"]);
                         }
                     }
                 }
@@ -527,7 +528,7 @@ namespace OpenHardwareMonitor.DAL
                     {
                         sqlInsertCommand.CommandText = c_insertComputer;
                         sqlInsertCommand.Parameters.Add(new SQLiteParameter("@mac", macAddress));
-                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@comipputerId", 1));
+                        sqlInsertCommand.Parameters.Add(new SQLiteParameter("@ip", 1));  // TODO get actual IP
                         sqlInsertCommand.ExecuteNonQuery();
                         computerId = s_dataManager._sqliteConnection.LastInsertRowId;
                     }
@@ -661,7 +662,7 @@ namespace OpenHardwareMonitor.DAL
                     command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
                     command.Parameters.Add(new SQLiteParameter("@sensorId", sensorID));  
                     command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeID));
-                    command.Parameters.Add(new SQLiteParameter("@computerID", CurrentComputerId));
+                    command.Parameters.Add(new SQLiteParameter("@computerID", GetComputerId(GetMacAddress)));
                     SQLiteDataReader reader= command.ExecuteReader();
 
                     if (reader.HasRows)
@@ -698,7 +699,7 @@ namespace OpenHardwareMonitor.DAL
 
                     command.CommandText = "SELECT * FROM ComputerComponent WHERE ComputerComponentID = @computerComponentId AND ComputerID = @computerID";
                     command.Parameters.Add(new SQLiteParameter("@computerComponentId", hardware.Identifier.ToString()));
-                    command.Parameters.Add(new SQLiteParameter("@computerID", CurrentComputerId));
+                    command.Parameters.Add(new SQLiteParameter("@computerID", GetComputerId(GetMacAddress)));
                     reader = command.ExecuteReader();
 
                     if (reader.HasRows)
@@ -747,7 +748,7 @@ namespace OpenHardwareMonitor.DAL
                 {
                     command.CommandText = "INSERT INTO ComputerComponent (ComputerComponentID, ComputerID, ComponentID, ParentComputerComponentID) values (@computerComponentId, @computerId, @componentId, @parentComputerComponentId)";
                     command.Parameters.Add(new SQLiteParameter("@computerComponentId", hardware.Identifier.ToString()));
-                    command.Parameters.Add(new SQLiteParameter("@computerId", CurrentComputerId));  //NOTE: hard coded!!!
+                    command.Parameters.Add(new SQLiteParameter("@computerId", GetComputerId(GetMacAddress)));
                     command.Parameters.Add(new SQLiteParameter("@componentId", componentId));
                     command.Parameters.Add(new SQLiteParameter("@parentComputerComponentId", (hardware.Parent == null?"":hardware.Parent.Identifier.ToString())));
                     command.ExecuteNonQuery();
@@ -765,11 +766,10 @@ namespace OpenHardwareMonitor.DAL
                 SQLiteDataReader reader;
                 using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
-
-                    command.CommandText = "INSERT INTO ComponentSensor (ComputerComponentID, SensorID, SensorName, SensorTypeID) values (@computerComponentId, @sensorId, @sensorName, @sensorTypeId)";
+                    command.CommandText = "SELECT ComponentSensorID FROM ComponentSensor WHERE ComputerID = @computerID AND ComputerComponentID = @computerComponentID AND SensorID = @sensorID AND SensorTypeID = @sensorTypeID";
+                    command.Parameters.Add(new SQLiteParameter("@computerId", GetComputerId(GetMacAddress)));
                     command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
                     command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));
-                    command.Parameters.Add(new SQLiteParameter("@sensorName", sensorName));
                     command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
                     reader = command.ExecuteReader();
 
@@ -779,11 +779,12 @@ namespace OpenHardwareMonitor.DAL
 
                 using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
-                    command.CommandText = "INSERT INTO ComponentSensor (ComputerComponentID, SensorID, SensorTypeID, ComputerID) values (@computerComponentId, @sensorId, @sensorTypeId, @computerID)";
+                    command.CommandText = "INSERT INTO ComponentSensor (ComputerID,ComputerComponentID, SensorID, SensorName, SensorTypeID) values (@computerID,@computerComponentId, @sensorId, @sensorName, @sensorTypeId)";
+                    command.Parameters.Add(new SQLiteParameter("@computerId", GetComputerId(GetMacAddress)));
                     command.Parameters.Add(new SQLiteParameter("@computerComponentId", computerComponentId));
-                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));  
+                    command.Parameters.Add(new SQLiteParameter("@sensorId", sensorId));
+                    command.Parameters.Add(new SQLiteParameter("@sensorName", sensorName));
                     command.Parameters.Add(new SQLiteParameter("@sensorTypeId", sensorTypeId));
-                    command.Parameters.Add(new SQLiteParameter("@computerID", CurrentComputerId));
                     command.ExecuteNonQuery();
                 }
             }
