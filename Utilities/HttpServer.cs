@@ -263,16 +263,12 @@ namespace OpenHardwareMonitor.Utilities
         private void SendTreeJSON(HttpListenerContext context)
         {
 
-            string JSON = "{[\"id\": 0, \"Text\": \"Sensor\", \"Parent\":\"\"";
-            JSON += ", \"sid\": \"Sensor ID\"";
-            JSON += ", \"cid\": \"Component ID\"";
-            JSON += ", \"Name\": \"Name\"";
-            JSON += ", \"Type\": \"Type\"";
-            JSON += ", \"ImageURL\": \"\"";
-            JSON += "]";
+            string JSON = "[";
             nodeCount = 1;
             JSON += GenerateTreeJSON(root, 0);
-            JSON += "}";
+            if (JSON.EndsWith(", "))
+                JSON = JSON.Remove(JSON.LastIndexOf(","));
+            JSON += "]";
 
             var responseContent = JSON;
             byte[] buffer = Encoding.UTF8.GetBytes(responseContent);
@@ -288,7 +284,7 @@ namespace OpenHardwareMonitor.Utilities
 
         private string GenerateTreeJSON(Node n, int parentID)
         {
-            string JSON = ", [\"id\": " + nodeCount + ", \"Text\": \"" + n.Text + "\", \"Parent\": " + parentID;
+            string JSON = "{\"id\": " + nodeCount + ", \"text\": \"" + n.Text + "\", \"parent\": " + parentID;
             int currentId = nodeCount;
             nodeCount++;
             if (n is SensorNode)
@@ -297,36 +293,32 @@ namespace OpenHardwareMonitor.Utilities
                 String sensorId = ((SensorNode)n).Sensor.Identifier.ToString().Remove(0, computerComponentId.Length);
                 JSON += ", \"sid\": \"" + sensorId + "\"";
                 JSON += ", \"cid\": \"" + computerComponentId + "\"";
-                JSON += ", \"Name\": \"" + ((SensorNode)n).Text + "\"";
-                JSON += ", \"Type\": \"" + ((SensorNode)n).Sensor.SensorType.ToString() + "\"";
-                JSON += ", \"ImageURL\": \"images/transparent.png\"";
+                JSON += ", \"type\": \"" + ((SensorNode)n).Sensor.SensorType.ToString() + "\"";
+                JSON += ", \"imageURL\": \"images/transparent.png\"";
             }
             else if (n is HardwareNode)
             {
                 JSON += ", \"sid\": \"\"";
                 JSON += ", \"cid\": \"\"";
-                JSON += ", \"Name\": \"\"";
-                JSON += ", \"Type\": \"\"";
-                JSON += ", \"ImageURL\": \"images_icon/" + getHardwareImageFile((HardwareNode)n) + "\"";
+                JSON += ", \"type\": \"\"";
+                JSON += ", \"imageURL\": \"images_icon/" + getHardwareImageFile((HardwareNode)n) + "\"";
             }
             else if (n is TypeNode)
             {
                 JSON += ", \"sid\": \"\"";
                 JSON += ", \"cid\": \"\"";
-                JSON += ", \"Name\": \"\"";
-                JSON += ", \"Type\": \"\"";
-                JSON += ", \"ImageURL\": \"images_icon/" + getTypeImageFile((TypeNode)n) + "\"";
+                JSON += ", \"type\": \"\"";
+                JSON += ", \"imageURL\": \"images_icon/" + getTypeImageFile((TypeNode)n) + "\"";
             }
             else
             {
                 JSON += ", \"sid\": \"\"";
                 JSON += ", \"cid\": \"\"";
-                JSON += ", \"Name\": \"\"";
-                JSON += ", \"Type\": \"\"";
-                JSON += ", \"ImageURL\": \"images_icon/computer.png\"";
+                JSON += ", \"type\": \"\"";
+                JSON += ", \"imageURL\": \"images_icon/computer.png\"";
             }
 
-            JSON += "]";
+            JSON += "}, ";
             foreach (Node child in n.Nodes)
                 JSON += GenerateTreeJSON(child, currentId);
             return JSON;

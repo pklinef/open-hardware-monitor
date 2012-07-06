@@ -283,6 +283,14 @@
     <EmbeddedResource Include="Resources\Web\js\knockout-2.1.0.min.js" />
     <EmbeddedResource Include="Resources\Web\js\knockout.mapping-latest.min.js" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Web\history.html" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Web\js\backbone-min.js" />
+    <EmbeddedResource Include="Resources\Web\js\history.js" />
+    <EmbeddedResource Include="Resources\Web\js\underscore-min.js" />
+  </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio AllowExistingFolder="true" />
