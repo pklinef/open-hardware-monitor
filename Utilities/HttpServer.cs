@@ -14,11 +14,13 @@ using System.Text;
 using System.Net;
 using System.Threading;
 using System.IO;
+using OpenHardwareMonitor.DAL;
 using OpenHardwareMonitor.GUI;
 using OpenHardwareMonitor.Hardware;
 using System.Reflection;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Globalization;
 
 namespace OpenHardwareMonitor.Utilities
 {
@@ -119,6 +121,12 @@ namespace OpenHardwareMonitor.Utilities
                 return;
             }
 
+            if (requestedFile.Contains("sensor.csv"))
+            {
+                sendSensorCSV(context);
+                return;
+            }
+
             if (requestedFile.Contains("images_icon"))
             {
                 serveResourceImage(context, requestedFile.Replace("images_icon/", ""));
@@ -189,6 +197,66 @@ namespace OpenHardwareMonitor.Utilities
           context.Response.OutputStream.Close();
           context.Response.StatusCode = 404;
           context.Response.Close();
+        }
+
+        private void sendSensorCSV(HttpListenerContext context)
+        {
+            HttpListenerRequest request = context.Request;
+
+            DateTime start = parseDate(request.QueryString["start"], DateTime.UtcNow.AddMinutes(-10));
+            DateTime end = parseDate(request.QueryString["end"], DateTime.UtcNow);
+
+            string sensorPath = request.RawUrl.Replace("/sensor.csv", "");
+            long componentSensorId = DataManager.GetComponentSensorId(sensorPath);
+
+            if (componentSensorId != -1)
+            {
+                double avg;
+                double min;
+                double max;
+                double stddev;
+                List<DataManagerData> values = DataManager.GetDataForSensor(componentSensorId, start, end - start, out avg, out min, out max, out stddev);
+
+                StringBuilder csv = new StringBuilder();
+                csv.AppendLine("Date,Value");
+                foreach (DataManagerData data in values)
+                {
+                    //http://dygraphs.com/date-formats.html
+                    csv.AppendLine(data.TimeStamp.ToString("yyyy/MM/dd HH:mm:ss") + "," + data.Measure);
+                }
+
+                var responseContent = csv.ToString();
+                byte[] buffer = Encoding.UTF8.GetBytes(responseContent);
+
+                context.Response.ContentLength64 = buffer.Length;
+                context.Response.ContentType = "text/csv";
+
+                Stream outputStream = context.Response.OutputStream;
+                outputStream.Write(buffer, 0, buffer.Length);
+                outputStream.Close();
+                return;
+            }
+
+            context.Response.OutputStream.Close();
+            context.Response.StatusCode = 404;
+            context.Response.Close();
+        }
+
+        private DateTime parseDate(String dateText, DateTime defaultDate)
+        {
+            DateTime result = defaultDate;
+            if (dateText != null)
+            {
+                if (dateText.Length == 19)
+                {
+                    result = DateTime.ParseExact(dateText, "dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+                }
+                else if (dateText.Length == 10)
+                {
+                    result = DateTime.ParseExact(dateText, "dd/MM/yyyy", CultureInfo.InvariantCulture);
+                }
+            }
+            return result;
         }
 
         private void sendJSON(HttpListenerContext context)
@@ -319,6 +387,7 @@ namespace OpenHardwareMonitor.Utilities
             }
 
             JSON += "}, ";
+
             foreach (Node child in n.Nodes)
                 JSON += GenerateTreeJSON(child, currentId);
             return JSON;

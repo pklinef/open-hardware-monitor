@@ -336,6 +336,33 @@ namespace OpenHardwareMonitor.DAL
             }
         }
 
+        public static long GetComponentSensorId(String fullSensorPath)
+        {
+            if (String.IsNullOrEmpty(fullSensorPath))
+            {
+                throw new ArgumentException("Sensor path must not be null or empty", "fullSensorPath");
+            }
+
+            long componentSensorId = -1;
+            lock (s_lockObject)
+            {
+                const string c_getCompoenntIdQuery = "SELECT ComponentSensorId, ComputerComponentID || SensorID as SensorPath from ComponentSensor WHERE SensorPath = @sensorPath";
+
+                SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection);
+                sqlQueryCommand.CommandText = c_getCompoenntIdQuery;
+                sqlQueryCommand.Parameters.Add(new SQLiteParameter("@sensorPath", fullSensorPath));
+
+                using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        componentSensorId = Convert.ToInt64(reader["ComponentSensorId"]);
+                    }
+                }
+            }
+            return componentSensorId;
+        }
+
         public static long GetComponentId(string name, string type)
         {
             if (String.IsNullOrEmpty(name))

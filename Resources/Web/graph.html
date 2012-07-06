@@ -1,0 +1,57 @@
+﻿<!DOCTYPE html> 
+<html> 
+  <head> 
+    <meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7; IE=EmulateIE9"> 
+    <title>Graph</title> 
+    <!--[if IE]>
+    <script type="text/javascript" src="js/excanvas.js"></script>
+    <![endif]--> 
+    <script type="text/javascript" src="js/dygraph-combined.js"></script> 
+    <script type='text/javascript' src='js/jquery-1.7.2.min.js'></script>
+    <style type="text/css"> 
+    #bordered {
+      border: 1px solid red;
+    }
+    </style> 
+  </head> 
+  <body> 
+    <select id="sensors">
+    </select>
+    <div id="sensor" style="width:800px; height:320px;"></div> 
+    <script type="text/javascript">
+        $(document).ready(function () {
+            var g1;
+
+            var sensorSelect = document.getElementById("sensors");
+            $.getJSON('tree.json',
+                function (data) {
+                    $.each(data, function (index, value) {
+                        if (value.sid != "" && value.cid != "" && value.sid != "Sensor ID") {
+                            sensorSelect.options[sensorSelect.length] = new Option(value.text + ' ' + value.type, index);
+                            if (g1 == null) {
+                                g1 = new Dygraph(
+                                    document.getElementById("sensor"),
+                                    value.cid + value.sid + "/sensor.csv",
+                                    {
+                                        title: value.text,
+                                        ylabel: value.type,
+                                        labelsDivStyles: { 'textAlign': 'right' }
+                                    }
+                                );
+                            }
+                        }
+                    });
+                    sensorSelect.onchange = function () {
+                        var chosen = this.options[this.selectedIndex];
+                        value = data[chosen.value];
+                        g1.updateOptions({ 'file': value.cid + value.sid + '/sensor.csv',
+                            'title': value.text,
+                            'ylabel': value.type
+                        });
+                    }
+                }
+            );
+        });
+    </script> 
+  </body> 
+</html>
