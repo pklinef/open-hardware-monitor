@@ -215,7 +215,7 @@ namespace OpenHardwareMonitor.Utilities
                 double min;
                 double max;
                 double stddev;
-                List<DataManagerData> values = DataManager.GetDataForSensor(componentSensorId, start, end - start, out avg, out min, out max, out stddev);
+                List<DataManagerData> values = DataManager.GetDataForSensor(componentSensorId, start, end - start, DataManager.DateRangeType.day, DataManager.DateRangeType.second, out avg, out min, out max, out stddev);
 
                 StringBuilder csv = new StringBuilder();
                 csv.AppendLine("Date,Value");

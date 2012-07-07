@@ -186,8 +186,18 @@ namespace OpenHardwareMonitor.DAL
 
         #region Get Methods
 
-        public static List<DataManagerData> GetDataForSensor(long componentSensorId, DateTime startTime, TimeSpan timeRange, out double average, out double min, out double max, out double stddev)
+        public static List<DataManagerData> GetDataForSensor(long componentSensorId, DateTime startTime, TimeSpan timeRange, DateRangeType minResolution, DateRangeType maxResolution, out double average, out double min, out double max, out double stddev)
         {
+            if (maxResolution > minResolution)
+            {
+                throw new ArgumentException("max resolution must be finer (less) than the min resolution!");
+            }
+
+            if (maxResolution > DateRangeType.hour)
+            {
+                throw new ArgumentException("We don't aggregate hours into days dynamically yet!");
+            }
+
             max = Double.MinValue;
             min = Double.MaxValue;
             average = 0;
@@ -206,7 +216,7 @@ namespace OpenHardwareMonitor.DAL
                 // Let's see if we need to grab the historical data
                 if (startTime < timeCutoff)
                 {
-                    const string c_selecttHistoricalData = "SELECT Count,Sum,DateRange,Date,SumOfSquares,Min,Max FROM HistoricalAggregation WHERE ComponentSensorID = @componentSensorId AND Date >= @minDate AND Date < @maxDate ORDER BY Date ASC, DateRange DESC";
+                    const string c_selecttHistoricalData = "SELECT Count,Sum,DateRange,Date,SumOfSquares,Min,Max FROM HistoricalAggregation WHERE ComponentSensorID = @componentSensorId AND Date >= @minDate AND Date < @maxDate AND DateRange >= @maxResolution AND DateRange <= @minResolution ORDER BY Date ASC, DateRange DESC";
 
                     // If the row already exists, we need to add the data together
                     using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
@@ -218,22 +228,16 @@ namespace OpenHardwareMonitor.DAL
                         // Only pull coarse grain info up to the cutoff. We have fine grained info above the cutoff
                         DateTime maxDate = (startTime + timeRange < timeCutoff) ? startTime + timeRange : timeCutoff;
                         sqlSelectCommand.Parameters.Add(new SQLiteParameter("@maxDate", maxDate));
+                        sqlSelectCommand.Parameters.Add(new SQLiteParameter("@maxResolution", maxResolution));
+                        sqlSelectCommand.Parameters.Add(new SQLiteParameter("@minResolution", minResolution));
 
                         using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
                         {
                             while (reader.Read())
                             {
                                 DataManagerData data = new DataManagerData();
-                                switch ((DateRangeType)Convert.ToInt32(reader["DateRange"]))
-                                {
-                                    case DateRangeType.hour:
-                                        data.TimeSpan = TimeSpan.FromHours(1);
-                                        break;
-                                    case DateRangeType.day:
-                                    default:
-                                        data.TimeSpan = TimeSpan.FromDays(1);
-                                        break;
-                                }
+                                DateRangeType currentRangeType = (DateRangeType)Convert.ToInt32(reader["DateRange"]);
+                                data.TimeSpan = GetTimeSpanFromDateRangeType(currentRangeType);
                                 data.TimeStamp = Convert.ToDateTime(reader["Date"]);
 
                                 // We'll always assume Count != 0 for this project
@@ -261,22 +265,60 @@ namespace OpenHardwareMonitor.DAL
                         sqlSelectCommand.Parameters.Add(new SQLiteParameter("@minTime", startTime));
                         sqlSelectCommand.Parameters.Add(new SQLiteParameter("@maxTime", startTime + timeRange));
                         sqlSelectCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
-
+                        
                         using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
                         {
+                            DateTime lastTime = DateTime.MinValue;
+                            double tempSum = 0;
+                            double tempCount = 0;
+                            
+                            // We need to aggregate the seconds together if the max resolution is coarser than a second
                             while (reader.Read())
                             {
                                 DataManagerData data = new DataManagerData();
-                                data.TimeSpan = TimeSpan.FromSeconds(1);
                                 data.TimeStamp = Convert.ToDateTime(reader["Date"]);
                                 data.Measure = Convert.ToDouble(reader["Value"]);
-                                retVal.Add(data);
+                                
+                                DateTime currentTime = RoundDownToDateRangeType(data.TimeStamp, maxResolution);
+                                if (currentTime > lastTime || maxResolution <= DateRangeType.second)
+                                {
+                                    if (lastTime > DateTime.MinValue)
+                                    {
+                                        DataManagerData newData = new DataManagerData();
+                                        newData.TimeStamp = lastTime;
+                                        newData.TimeSpan = GetTimeSpanFromDateRangeType(maxResolution);
+                                        newData.Measure = (tempSum / (double)tempCount);
+                                        retVal.Add(newData);
+                                        min = Math.Min(min, newData.Measure);
+                                        max = Math.Max(max, newData.Measure);
+                                        sumOfSquares += newData.Measure * newData.Measure;
+                                        sum += newData.Measure;
+                                        count++;
+                                        tempSum = 0;
+                                        tempCount = 0;
+                                    }
 
-                                min = Math.Min(min, data.Measure);
-                                max = Math.Max(max, data.Measure);
-                                sumOfSquares += data.Measure * data.Measure;
-                                sum += data.Measure;
+                                    lastTime = currentTime;                                    
+                                }
+
+                                tempSum += data.Measure;
+                                tempCount++;
+                            }
+
+                            if (lastTime > DateTime.MinValue)
+                            {
+                                DataManagerData newData = new DataManagerData();
+                                newData.TimeStamp = lastTime;
+                                newData.TimeSpan = GetTimeSpanFromDateRangeType(maxResolution);
+                                newData.Measure = (tempSum / (double)tempCount);
+                                retVal.Add(newData);
+                                min = Math.Min(min, newData.Measure);
+                                max = Math.Max(max, newData.Measure);
+                                sumOfSquares += newData.Measure * newData.Measure;
+                                sum += newData.Measure;
                                 count++;
+                                tempSum = 0;
+                                tempCount = 0;
                             }
                         }
                     }
@@ -829,9 +871,55 @@ namespace OpenHardwareMonitor.DAL
             return dt.Date;
         }
 
-        private enum DateRangeType
+        private static DateTime RoundDownToMinute(DateTime dt)
+        {
+            DateTime retVal = new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, 0, DateTimeKind.Utc);
+            return retVal;
+        }
+
+        private static DateTime RoundDownToSecond(DateTime dt)
+        {
+            DateTime retVal = new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second, DateTimeKind.Utc);
+            return retVal;
+        }
+
+        private static DateTime RoundDownToDateRangeType(DateTime dt, DateRangeType drt)
+        {
+            switch (drt)
+            {
+                case DateRangeType.day:
+                    return RoundDownToDay(dt);
+                case DateRangeType.hour:
+                    return RoundDownToHour(dt);
+                case DateRangeType.minute:
+                    return RoundDownToMinute(dt);
+                case DateRangeType.second:
+                default:
+                    return RoundDownToSecond(dt);
+            }
+        }
+
+        private static TimeSpan GetTimeSpanFromDateRangeType(DateRangeType drt)
+        {
+            switch (drt)
+            {
+                case DateRangeType.second:
+                    return TimeSpan.FromSeconds(1);
+                case DateRangeType.minute:
+                    return TimeSpan.FromMinutes(1);
+                case DateRangeType.hour:
+                    return TimeSpan.FromHours(1);
+                case DateRangeType.day:
+                default:
+                    return TimeSpan.FromDays(1);
+            }
+        }
+
+        public enum DateRangeType
         {
             // Let's give ourselves some room
+            second = 1,
+            minute = 3,
             hour = 6,
             day = 10,
         }
