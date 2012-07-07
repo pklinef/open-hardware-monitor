@@ -15,12 +15,17 @@
     </style> 
   </head> 
   <body> 
-    <select id="sensors">
-    </select>
+    <select id="sensors" />
+    <input id="refresh" type="button" value="Refresh" />
     <div id="sensor" style="width:800px; height:320px;"></div> 
     <script type="text/javascript">
         $(document).ready(function () {
             var g1;
+
+            var refreshBtn = document.getElementById("refresh");
+            refreshBtn.onclick = function () {
+                g1.updateOptions({'file':g1.file_});
+            }
 
             var sensorSelect = document.getElementById("sensors");
             $.getJSON('tree.json',
