@@ -208,7 +208,8 @@ namespace OpenHardwareMonitor.Utilities
             DateTime start = parseDate(request.QueryString["start"], DateTime.UtcNow.AddMinutes(-10));
             DateTime end = parseDate(request.QueryString["end"], DateTime.UtcNow);
 
-            string sensorPath = request.RawUrl.Replace("/sensor.csv", "");
+            string req = request.RawUrl;
+            string sensorPath = req.Substring(0, req.IndexOf("/sensor.csv"));//request.RawUrl.Replace("/sensor.csv", "");
             long componentSensorId = DataManager.GetComponentSensorId(sensorPath);
 
             if (componentSensorId != -1)
@@ -251,11 +252,11 @@ namespace OpenHardwareMonitor.Utilities
             {
                 if (dateText.Length == 19)
                 {
-                    result = DateTime.ParseExact(dateText, "dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
                 }
                 else if (dateText.Length == 10)
                 {
-                    result = DateTime.ParseExact(dateText, "dd/MM/yyyy", CultureInfo.InvariantCulture);
+                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd", CultureInfo.InvariantCulture);
                 }
             }
             return result;
