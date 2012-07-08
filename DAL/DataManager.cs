@@ -827,6 +827,27 @@ namespace OpenHardwareMonitor.DAL
 
         #endregion
 
+        #region Update Methods
+
+        public static void UpdateLastAccessTime()
+        {
+            const string c_updateLastAccessTime = "UPDATE Computer SET LastAccessTime = @lastAccessTime WHERE ComputerID = @computerId;";
+
+            lock (s_lockObject)
+            {
+                using (SQLiteCommand sqlUpdateCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    sqlUpdateCommand.CommandText = c_updateLastAccessTime;
+                    sqlUpdateCommand.Parameters.Add(new SQLiteParameter("@computerId", GetComputerId(GetMacAddress)));
+                    sqlUpdateCommand.Parameters.Add(new SQLiteParameter("@lastAccessTime", DateTime.UtcNow));
+
+                    sqlUpdateCommand.ExecuteNonQuery();
+                }
+            }
+        }
+
+        #endregion
+
         public static void RegisterSensor(string computerComponentId, string sensorId, string sensorName, int sensorTypeId)
         {
             lock (s_lockObject)

@@ -101,6 +101,8 @@ namespace OpenHardwareMonitor.Utilities
 
         public void ListenerCallback(IAsyncResult result)
         {
+            DataManager.UpdateLastAccessTime();
+
             HttpListener listener = (HttpListener)result.AsyncState;
             if (listener == null || !listener.IsListening)
                 return;
