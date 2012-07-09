@@ -15,6 +15,9 @@
     <script type='text/javascript' src='js/underscore-min.js'></script>
     <script type='text/javascript' src='js/backbone-min.js'></script>
 
+    <link rel="stylesheet" type="text/css" href="css/anytime.c.css" />
+    <script src="js/anytime.c.js"></script>
+
     <script type='text/javascript' src='js/graph.js'></script>
    <style type="text/css">
        html, body
@@ -50,6 +53,12 @@
            height: 100%;
            margin: 0 0;
        }
+       #rangeStart, #rangeEnd
+       {
+           background-image: url("images/calendar.png");
+           background-position: right center;
+           background-repeat: no-repeat;
+       }
    </style>
 
 </head> 
@@ -62,14 +71,31 @@
                 <div id="sensor"> </div>
             </div>
             <div id="sidebar">
-                <input id="refresh" type="button" value="Refresh" />
-                    <script id="tpl-node" type="text/template">
-                            <tr id="node-<%= id %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>
-                                <td><% if (imageURL){ %><img src="<%= imageURL %>"/><% } %>&nbsp; <%= text %></td>
-                                <td><%= type %></td>
-                                <td><% if (sid) { %><input type='radio' name='sensor_radios' /><% } %></td>
-                            </tr> 
-                    </script>
+                <table border="0">
+                    <tr>
+                        <td> Start: <input type="text" id="rangeStart"  /> </td>
+                        <td> End: <input type="text" id="rangeEnd" /> </td>
+                    </tr>
+                    <tr>
+                        <td> <input type="button" id="rangeTenMinutes" value="10 Min" style="width:100px" />  </td>
+                        <td> <input type="button" id="rangeHour" value="Hour"  style="width:100px"/></td>
+                    </tr>
+                    <tr>
+                        <td> <input type="button" id="rangeToday" value="Today" style="width:100px" />  </td>
+                        <td> <input type="button" id="rangeDay" value="Day" style="width:100px" /> </td>
+                    </tr>
+                    <tr>
+                        <td> <input type="button" id="rangeWeek" value="Week" style="width:100px" /> </td>
+                        <td> <input id="refresh" type="button" value="Refresh Graph" style="width:100px" /> </td>
+                    </tr>
+                </table>
+                <script id="tpl-node" type="text/template">
+                        <tr id="node-<%= id %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>
+                            <td><% if (imageURL){ %><img src="<%= imageURL %>"/><% } %>&nbsp; <%= text %></td>
+                            <td><%= type %></td>
+                            <td><% if (sid) { %><input type='radio' name='sensor_radios' /><% } %></td>
+                        </tr> 
+                </script>
             </div>
         </div>
 

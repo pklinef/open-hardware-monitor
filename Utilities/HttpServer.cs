@@ -252,11 +252,12 @@ namespace OpenHardwareMonitor.Utilities
             {
                 if (dateText.Length == 19)
                 {
-                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture).ToUniversalTime();
+
                 }
                 else if (dateText.Length == 10)
                 {
-                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd", CultureInfo.CurrentCulture).ToUniversalTime();
                 }
             }
             return result;
