@@ -101,6 +101,7 @@ namespace OpenHardwareMonitor.Utilities
 
         public void ListenerCallback(IAsyncResult result)
         {
+            var lastAccessTime = DataManager.GetLastAccessTime();
             DataManager.UpdateLastAccessTime();
 
             HttpListener listener = (HttpListener)result.AsyncState;
@@ -120,6 +121,12 @@ namespace OpenHardwareMonitor.Utilities
             if (requestedFile == "tree.json")
             {
                 SendTreeJSON(context);
+                return;
+            }
+
+            if (requestedFile == "lat.json")
+            {
+                SendLATJSON(context, lastAccessTime);
                 return;
             }
 
@@ -209,7 +216,7 @@ namespace OpenHardwareMonitor.Utilities
             DateTime end = parseDate(request.QueryString["end"], DateTime.UtcNow);
 
             string req = request.RawUrl;
-            string sensorPath = req.Substring(0, req.IndexOf("/sensor.csv"));//request.RawUrl.Replace("/sensor.csv", "");
+            string sensorPath = req.Substring(0, req.IndexOf("/sensor.csv"));
             long componentSensorId = DataManager.GetComponentSensorId(sensorPath);
 
             if (componentSensorId != -1)
@@ -330,6 +337,22 @@ namespace OpenHardwareMonitor.Utilities
 
             JSON += "}";
             return JSON;
+        }
+
+        private void SendLATJSON(HttpListenerContext context, DateTime lastAccessTime)
+        {
+
+            string JSON = "{\"lastAccessTime\": \"" + lastAccessTime + "\"}";
+            var responseContent = JSON;
+            byte[] buffer = Encoding.UTF8.GetBytes(responseContent);
+
+            context.Response.ContentLength64 = buffer.Length;
+            context.Response.ContentType = "application/json";
+
+            Stream outputStream = context.Response.OutputStream;
+            outputStream.Write(buffer, 0, buffer.Length);
+            outputStream.Close();
+
         }
 
         private void SendTreeJSON(HttpListenerContext context)

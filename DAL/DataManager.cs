@@ -606,6 +606,30 @@ namespace OpenHardwareMonitor.DAL
 
             return computerId;
         }
+
+        public static DateTime GetLastAccessTime()
+        {
+            const string c_getLastAccessTime = "SELECT LastAccessTime FROM Computer WHERE ComputerID = @computerId;";
+
+            lock (s_lockObject)
+            {
+                using (SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    sqlQueryCommand.CommandText = c_getLastAccessTime;
+                    sqlQueryCommand.Parameters.Add(new SQLiteParameter("@computerId", GetComputerId(GetMacAddress)));
+
+                    using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            return DateTime.Parse(reader["LastAccessTime"].ToString());
+                        }
+                    }
+                }
+            }
+            return DateTime.UtcNow;
+        }
+
         #endregion
 
         #region Insert Methods

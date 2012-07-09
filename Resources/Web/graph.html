@@ -88,6 +88,9 @@
                         <td> <input type="button" id="rangeWeek" value="Week" style="width:100px" /> </td>
                         <td> <input id="refresh" type="button" value="Refresh Graph" style="width:100px" /> </td>
                     </tr>
+                    <tr>
+                        <td colspan="2"> Last Visit: <span id="lastAccessTime" /> </td>
+                    </tr>
                 </table>
                 <script id="tpl-node" type="text/template">
                         <tr id="node-<%= id %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>

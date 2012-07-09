@@ -129,4 +129,7 @@ $(window).load(function () {
     $("#sidebar").append(view.render().el);
     coll.fetch();
     setDefaultRange();
+    $.getJSON('lat.json', function(data) {
+        $("#lastAccessTime").text(data.lastAccessTime);
+    });
 });
