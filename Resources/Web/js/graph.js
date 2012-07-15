@@ -32,7 +32,7 @@ $(window).load(function () {
                     },
 
                     title : {
-                        text : 'Sensor Data'
+                        text : this.get("text")
                     },
 
                     navigator: {
@@ -40,6 +40,12 @@ $(window).load(function () {
                             id: "navSeries"
                         }
                     },
+
+                    yAxis: [{
+                        title: {
+                            text: this.get("type")
+                        }
+                    }],
                     
                     series : [{
                         id : this.get("id"),
@@ -60,6 +66,12 @@ $(window).load(function () {
                 name : this.get("text"),
                 data : this.get("data")
             }, false);
+
+            chart.setTitle({text: this.get("text")});
+
+            chart.yAxis[0].axisTitle.attr({
+                text: this.get("type")
+            });
             curSeries = this.get("id");
             chart.get('navSeries').setData(this.get("data"), true);
             chart.hideLoading();
