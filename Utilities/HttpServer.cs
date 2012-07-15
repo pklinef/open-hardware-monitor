@@ -118,8 +118,13 @@ namespace OpenHardwareMonitor.Utilities
                 return;
             }
 
-            if (requestedFile == "tree.json")
+            if (requestedFile.Contains("sensors"))
             {
+                if (requestedFile.Contains("-"))
+                {
+                    SendSensorDataJSON(context);
+                    return;
+                }
                 SendTreeJSON(context);
                 return;
             }
@@ -355,6 +360,53 @@ namespace OpenHardwareMonitor.Utilities
 
         }
 
+        private void SendSensorDataJSON(HttpListenerContext context)
+        {
+            HttpListenerRequest request = context.Request;
+
+            DateTime start = parseDate(request.QueryString["start"], DateTime.UtcNow.AddMinutes(-10));
+            DateTime end = parseDate(request.QueryString["end"], DateTime.UtcNow);
+
+            string req = request.RawUrl;
+            req = req.Remove(req.IndexOf('?'));
+            string sensorId = req.Substring(9);// "sensors/" is 8 characters long
+            string sensorPath = req.Substring(8).Replace('-', '/'); 
+            long componentSensorId = DataManager.GetComponentSensorId(sensorPath);
+
+            if (componentSensorId != -1)
+            {
+                double avg;
+                double min;
+                double max;
+                double stddev;
+                List<DataManagerData> values = DataManager.GetDataForSensor(componentSensorId, start, end - start, DataManager.DateRangeType.day, DataManager.DateRangeType.second, out avg, out min, out max, out stddev);
+
+                var epoch = new DateTime (1970, 1, 1);
+                string JSON = "{\"id\": \"" + sensorId + "\", \"data\": [";
+                foreach (DataManagerData data in values)
+                {
+                    JSON += ("[" + (data.TimeStamp - epoch).TotalMilliseconds + ", " + data.Measure + "],");
+                }
+                JSON = JSON.Remove(JSON.LastIndexOf(","));
+                JSON += ("]}");
+
+                var responseContent = JSON.ToString();
+                byte[] buffer = Encoding.UTF8.GetBytes(responseContent);
+
+                context.Response.ContentLength64 = buffer.Length;
+                context.Response.ContentType = "application/json";
+
+                Stream outputStream = context.Response.OutputStream;
+                outputStream.Write(buffer, 0, buffer.Length);
+                outputStream.Close();
+                return;
+            }
+
+            context.Response.OutputStream.Close();
+            context.Response.StatusCode = 404;
+            context.Response.Close();
+        }
+
         private void SendTreeJSON(HttpListenerContext context)
         {
 
@@ -379,36 +431,32 @@ namespace OpenHardwareMonitor.Utilities
 
         private string GenerateTreeJSON(Node n, int parentID)
         {
-            string JSON = "{\"id\": " + nodeCount + ", \"text\": \"" + n.Text + "\", \"parent\": " + parentID;
+            string JSON = "{\"nid\": " + nodeCount + ", \"text\": \"" + n.Text + "\", \"parent\": " + parentID;
             int currentId = nodeCount;
             nodeCount++;
             if (n is SensorNode)
             {
-                String computerComponentId = ((SensorNode)n).Sensor.Hardware.Identifier.ToString();
-                String sensorId = ((SensorNode)n).Sensor.Identifier.ToString().Remove(0, computerComponentId.Length);
-                JSON += ", \"sid\": \"" + sensorId + "\"";
-                JSON += ", \"cid\": \"" + computerComponentId + "\"";
+                //remove the first / and replace all others with -
+                String sensorId = ((SensorNode)n).Sensor.Identifier.ToString().Substring(1).Replace("/", "-");
+                JSON += ", \"id\": \"" + sensorId + "\"";
                 JSON += ", \"type\": \"" + ((SensorNode)n).Sensor.SensorType.ToString() + "\"";
                 JSON += ", \"imageURL\": \"images/transparent.png\"";
             }
             else if (n is HardwareNode)
             {
-                JSON += ", \"sid\": \"\"";
-                JSON += ", \"cid\": \"\"";
+                JSON += ", \"id\": \"" + currentId + "\"";
                 JSON += ", \"type\": \"\"";
                 JSON += ", \"imageURL\": \"images_icon/" + getHardwareImageFile((HardwareNode)n) + "\"";
             }
             else if (n is TypeNode)
             {
-                JSON += ", \"sid\": \"\"";
-                JSON += ", \"cid\": \"\"";
+                JSON += ", \"id\": \"" + currentId + "\"";
                 JSON += ", \"type\": \"\"";
                 JSON += ", \"imageURL\": \"images_icon/" + getTypeImageFile((TypeNode)n) + "\"";
             }
             else
             {
-                JSON += ", \"sid\": \"\"";
-                JSON += ", \"cid\": \"\"";
+                JSON += ", \"id\": \"" + currentId + "\"";
                 JSON += ", \"type\": \"\"";
                 JSON += ", \"imageURL\": \"images_icon/computer.png\"";
             }

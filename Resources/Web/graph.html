@@ -6,7 +6,6 @@
     <!--[if IE]>
     <script type="text/javascript" src="js/excanvas.js"></script>
     <![endif]--> 
-    <script type="text/javascript" src="js/dygraph-combined.js"></script> 
     <script type='text/javascript' src='js/jquery-1.7.2.min.js'></script>
 
     <link href="css/jquery.treeTable.css" rel="stylesheet" type="text/css" />
@@ -14,6 +13,7 @@
 
     <script type='text/javascript' src='js/underscore-min.js'></script>
     <script type='text/javascript' src='js/backbone-min.js'></script>
+    <script type='text/javascript' src='js/highstock.js'></script>
 
     <link rel="stylesheet" type="text/css" href="css/anytime.c.css" />
     <script src="js/anytime.c.js"></script>
@@ -93,10 +93,10 @@
                     </tr>
                 </table>
                 <script id="tpl-node" type="text/template">
-                        <tr id="node-<%= id %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>
+                        <tr id="node-<%= nid %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>
                             <td><% if (imageURL){ %><img src="<%= imageURL %>"/><% } %>&nbsp; <%= text %></td>
                             <td><%= type %></td>
-                            <td><% if (sid) { %><input type='radio' name='sensor_radios' /><% } %></td>
+                            <td><% if (id.indexOf("-") != -1) { %><input type='radio' name='sensor_radios' value='<%= id %>' /><% } %></td>
                         </tr> 
                 </script>
             </div>

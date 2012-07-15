@@ -287,8 +287,6 @@
     <EmbeddedResource Include="Resources\Web\js\backbone-min.js" />
     <EmbeddedResource Include="Resources\Web\js\underscore-min.js" />
     <EmbeddedResource Include="Resources\Web\graph.html" />
-    <EmbeddedResource Include="Resources\Web\js\dygraph-combined.js" />
-    <EmbeddedResource Include="Resources\Web\js\excanvas.js" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\Web\js\graph.js" />
@@ -297,6 +295,9 @@
     <EmbeddedResource Include="Resources\Web\css\anytime.c.css" />
     <EmbeddedResource Include="Resources\Web\images\calendar.png" />
     <EmbeddedResource Include="Resources\Web\js\anytime.c.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Web\js\highstock.js" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
