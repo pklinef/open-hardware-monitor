@@ -1,5 +1,6 @@
 $(window).load(function () {
     var chart;
+    var graph;
     var curSeries;
 
     //keeping track of the two datefields
@@ -17,64 +18,38 @@ $(window).load(function () {
             data:''
         },
         initialize: function () {
-            this.bind("change:data", this.updateChart);
+            this.bind("change:data", this.parseData);
         },
-        updateChart: function (e) {
-            console.log("updating");
-            if (chart == null) {
-                chart = new Highcharts.StockChart({
-                    chart : {
-                        renderTo : 'sensor'
-                    },
+        parseData: function (e) {
+            //convert the first column to Date objects
+            var newData = _.map(this.get("data"), function(row){ return [new Date(row[0]), row[1]]; });
+            this.set({"data":null}, {silent: true});
+            this.set({"data":newData}, {silent: true});
+            this.updateChart();
+        },
 
-                    rangeSelector: {
-                        enabled: false
-                    },
-
-                    title : {
-                        text : this.get("text")
-                    },
-
-                    navigator: {
-                        series: {
-                            id: "navSeries"
-                        }
-                    },
-
-                    yAxis: [{
-                        title: {
-                            text: this.get("type")
-                        }
-                    }],
-                    
-                    series : [{
-                        id : this.get("id"),
-                        name : this.get("text"),
-                        data : this.get("data")
-                    }]
-                });
-
-                curSeries = this.get("id");
-                return;
+        updateChart: function () {
+            if (graph == null) {
+                graph = new Dygraph(
+                    document.getElementById("sensor"),
+                    this.get("data"),
+                    {
+                        title: this.get("text"),
+                        xlabel: "Date",
+                        ylabel: this.get("type"),
+                        labels: ["Date", this.get("text")],
+                        labelsDivStyles: { 'textAlign': 'right' },
+                        showRangeSelector: true
+                    }
+                );
             }
-
-            chart.get(curSeries).remove(false);
-
-            //update the navigator data and the chart series data, refresh chart only at the last call
-            chart.addSeries({
-                id : this.get("id"),
-                name : this.get("text"),
-                data : this.get("data")
-            }, false);
-
-            chart.setTitle({text: this.get("text")});
-
-            chart.yAxis[0].axisTitle.attr({
-                text: this.get("type")
-            });
-            curSeries = this.get("id");
-            chart.get('navSeries').setData(this.get("data"), true);
-            chart.hideLoading();
+            else {
+                graph.updateOptions({ 'file': this.get("data"),
+                    'title': this.get("text"),
+                    'labels': ["Date", this.get("text")],
+                    'ylabel': this.get("type")
+                });
+            }
         }
     });
 
@@ -95,7 +70,7 @@ $(window).load(function () {
             return this;
         },
         plot: function () {
-            if (chart) chart.showLoading();
+            //if (chart) chart.showLoading();
             this.model.set({"data":null}, {silent: true});
             this.model.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
             return;
@@ -127,11 +102,11 @@ $(window).load(function () {
     });
 
     var refreshChart = function () {
-        if (chart == null)
+        if (graph == null)
             return;
         var curModel = coll.get($('input:radio[name=sensor_radios]:checked').val());
         curModel.set({"data":null}, {silent: true});
-        chart.showLoading();
+        //chart.showLoading();
         curModel.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
     };
 

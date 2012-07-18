@@ -299,6 +299,10 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\Web\js\highstock.js" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Web\js\dygraph-combined.js" />
+    <EmbeddedResource Include="Resources\Web\js\excanvas.js" />
+  </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio AllowExistingFolder="true" />

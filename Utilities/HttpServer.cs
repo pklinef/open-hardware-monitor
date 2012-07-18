@@ -385,7 +385,7 @@ namespace OpenHardwareMonitor.Utilities
                 string JSON = "{\"id\": \"" + sensorId + "\", \"data\": [";
                 foreach (DataManagerData data in values)
                 {
-                    JSON += ("[" + (data.TimeStamp - epoch).TotalMilliseconds + ", " + data.Measure + "],");
+                    JSON += "[\"" + data.TimeStamp.ToString("yyyy/MM/dd HH:mm:ss") + "\", " + data.Measure + "],";
                 }
                 JSON = JSON.Remove(JSON.LastIndexOf(","));
                 JSON += ("]}");
