@@ -186,6 +186,26 @@ namespace OpenHardwareMonitor.DAL
 
         #region Get Methods
 
+        /// <summary>
+        /// Gets the data from the server to return to the client. Null is allowed for the name only
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="type"></param>
+        /// <param name="sensorType"></param>
+        /// <param name="average"></param>
+        /// <param name="min"></param>
+        /// <param name="max"></param>
+        /// <param name="stddev"></param>
+        /// <returns>True if data is found, false otherwise</returns>
+        public static bool GetData(string name, string type, SensorType sensorType, out double average, out double min, out double max, out double stddev)
+        {
+            average = 0;
+            min = 0;
+            max = 0;
+            stddev = 0;
+            return false;
+        }
+
         public static List<DataManagerData> GetDataForSensor(long componentSensorId, DateTime startTime, TimeSpan timeRange, DateRangeType minResolution, DateRangeType maxResolution, out double average, out double min, out double max, out double stddev)
         {
             if (maxResolution > minResolution)
@@ -634,6 +654,22 @@ namespace OpenHardwareMonitor.DAL
 
         #region Insert Methods
 
+        /// <summary>
+        /// Inserts data into the server database. Nothing is allowed to be null
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="type"></param>
+        /// <param name="sensorType"></param>
+        /// <param name="average"></param>
+        /// <param name="min"></param>
+        /// <param name="max"></param>
+        /// <param name="stddev"></param>
+        /// <returns>true if inserted, false otherwise</returns>
+        public static bool InsertData(string name, string type, SensorType sensorType, int count, double sum, double sumOfSquares)
+        {
+            return false;
+        }
+
         public static void InsertUser(string userName, string name)
         {
             const string c_userExistsQuery = "SELECT Username FROM User WHERE Username = @userName";
@@ -969,6 +1005,16 @@ namespace OpenHardwareMonitor.DAL
             day = 10,
         }
 
+        public class AggregateContainer
+        {
+            public DateTime currentDay = DateTime.MinValue;
+            public double sum = 0;
+            public double max = 0;
+            public double min = 0;
+            public double sumOfSquares = 0;
+            public long count = 0;
+        }
+
         public static void AggregateHistoricalData()
         {
             DateTime currentTime = DateTime.UtcNow;
@@ -1147,9 +1193,17 @@ namespace OpenHardwareMonitor.DAL
                                         sumOfSquares,
                                         min,
                                         max);
-                                }
+                                }                                
                             }
                         }
+
+                        List<AggregateContainer> dataToSendToServer = new List<AggregateContainer>();
+                        // TODO: Get the data to send to server since last watermark
+                        //bool sendToServerSuccess = SendToServer(dataToSendToServer);
+                        //if (sendToServerSuccess)
+                        //{
+                        //    // TODO: Update watermark
+                        //}
 
                         const string c_deleteSensorData = "DELETE FROM HistoricalAggregation WHERE Date < @date AND DateRange = @dateRange";
                         using (SQLiteCommand sqlDeleteCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
