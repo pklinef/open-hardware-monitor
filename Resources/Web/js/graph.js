@@ -1,22 +1,61 @@
 $(window).load(function () {
+    var chart;
     var graph;
+    var curSeries;
+
+    //keeping track of the two datefields
+    //so that we don't traverse the DOM tree every time
+    var startDateEl = $("#rangeStart");
+    var endDateEl = $("#rangeEnd");
+
     var Node = Backbone.Model.extend({
         defaults: {
             id: '',
             text: '',
             parent: '',
-            sid: '',
-            cid: '',
             type: '',
-            imageURL: ''
+            imageURL: '',
+            data:''
         },
         initialize: function () {
+            this.bind("change:data", this.parseData);
+        },
+        parseData: function (e) {
+            //convert the first column to Date objects
+            var newData = _.map(this.get("data"), function(row){ return [new Date(row[0]), row[1]]; });
+            this.set({"data":null}, {silent: true});
+            this.set({"data":newData}, {silent: true});
+            this.updateChart();
+        },
+
+        updateChart: function () {
+            if (graph == null) {
+                graph = new Dygraph(
+                    document.getElementById("sensor"),
+                    this.get("data"),
+                    {
+                        title: this.get("text"),
+                        xlabel: "Date",
+                        ylabel: this.get("type"),
+                        labels: ["Date", this.get("text")],
+                        labelsDivStyles: { 'textAlign': 'right' },
+                        showRangeSelector: true
+                    }
+                );
+            }
+            else {
+                graph.updateOptions({ 'file': this.get("data"),
+                    'title': this.get("text"),
+                    'labels': ["Date", this.get("text")],
+                    'ylabel': this.get("type")
+                });
+            }
         }
     });
 
     var Tree = Backbone.Collection.extend({
         model: Node,
-        url: '/tree.json',
+        url: '/sensors',
     });
 
     var NodeView = Backbone.View.extend({
@@ -31,23 +70,10 @@ $(window).load(function () {
             return this;
         },
         plot: function () {
-            if (graph == null) {
-                graph = new Dygraph(
-                    document.getElementById("sensor"),
-                    this.model.get("cid") + this.model.get("sid") + "/sensor.csv?start=" + $("#rangeStart").val() + '&end=' + $("#rangeEnd").val(),
-                    {
-                        title: this.model.get("text"),
-                        ylabel: this.model.get("type"),
-                        labelsDivStyles: { 'textAlign': 'right' }
-                    }
-                );
-            }
-            else {
-                graph.updateOptions({ 'file': this.model.get("cid") + this.model.get("sid") + '/sensor.csv?start=' + $("#rangeStart").val() + '&end=' + $("#rangeEnd").val(),
-                    'title': this.model.get("text"),
-                    'ylabel': this.model.get("type")
-                });
-            }
+            //if (chart) chart.showLoading();
+            this.model.set({"data":null}, {silent: true});
+            this.model.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
+            return;
         }
     });
 
@@ -75,11 +101,21 @@ $(window).load(function () {
         }
     });
 
+    var refreshChart = function () {
+        if (graph == null)
+            return;
+        var curModel = coll.get($('input:radio[name=sensor_radios]:checked').val());
+        curModel.set({"data":null}, {silent: true});
+        //chart.showLoading();
+        curModel.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
+    };
+
     var setDefaultRange = function(e) {
           var now = new Date();
           var past = new Date(now - 10*60*1000);
-          $("#rangeStart").val(rangeConv.format(past));
-          $("#rangeEnd").val(rangeConv.format(now)) 
+          startDateEl.val(rangeConv.format(past));
+          endDateEl.val(rangeConv.format(now)) 
+          refreshChart();
     }
 
     var rangeFormat = "%Y-%m-%d %T";
@@ -88,47 +124,52 @@ $(window).load(function () {
     $("#rangeToday").click( function(e) {
       var day = new Date();
       day.setHours(0,0,0,0);
-      $("#rangeStart").val(rangeConv.format(day));
-      $("#rangeEnd").val(rangeConv.format(new Date())) } );
+      startDateEl.val(rangeConv.format(day));
+      endDateEl.val(rangeConv.format(new Date())) 
+      refreshChart();
+    });
 
     $("#rangeTenMinutes").click(setDefaultRange);
 
     $("#rangeHour").click( function(e) {
       var now = new Date();
       var past = new Date(now - 60*60*1000);
-      $("#rangeStart").val(rangeConv.format(past));
-      $("#rangeEnd").val(rangeConv.format(now)) } );
+      startDateEl.val(rangeConv.format(past));
+      endDateEl.val(rangeConv.format(now)) 
+      refreshChart();
+    });
 
     $("#rangeDay").click( function(e) {
       var now = new Date();
       var past = new Date(now - 24*60*60*1000);
-      $("#rangeStart").val(rangeConv.format(past));
-      $("#rangeEnd").val(rangeConv.format(now)) } );
+      startDateEl.val(rangeConv.format(past));
+      endDateEl.val(rangeConv.format(now)) 
+      refreshChart();
+    });
 
     $("#rangeWeek").click( function(e) {
       var now = new Date();
       var past = new Date(now - 7*24*60*60*1000);
-      $("#rangeStart").val(rangeConv.format(past));
-      $("#rangeEnd").val(rangeConv.format(now)) } );
+      startDateEl.val(rangeConv.format(past));
+      endDateEl.val(rangeConv.format(now)) 
+      refreshChart();
+    });
 
     $("#rangeClear").click( function(e) {
-      $("#rangeStart").val("").change(); } );
+      startDateEl.val("").change(); } );
 
-    $("#rangeStart").AnyTime_picker({format:rangeFormat});
-    $("#rangeEnd").AnyTime_picker({format:rangeFormat});
-
-    var refreshBtn = document.getElementById("refresh");
-    refreshBtn.onclick = function () {
-        if (graph == null)
-            return;
-        graph.updateOptions({'file':graph.file_.replace(/start=.*/, 'start=' + $("#rangeStart").val() + '&end=' + $("#rangeEnd").val())});
-    }
+    startDateEl.AnyTime_picker({format:rangeFormat});
+    endDateEl.AnyTime_picker({format:rangeFormat});
 
     var coll = new Tree();
     var view = new TreeView({ collection: coll })
+
     $("#sidebar").append(view.render().el);
+
     coll.fetch();
     setDefaultRange();
+    $("#refresh").click(refreshChart);
+
     $.getJSON('lat.json', function(data) {
         $("#lastAccessTime").text(data.lastAccessTime);
     });

@@ -642,6 +642,8 @@ namespace OpenHardwareMonitor.DAL
                     {
                         while (reader.Read())
                         {
+                            if (reader["LastAccessTime"].ToString() == "")
+                                return DateTime.UtcNow;
                             return DateTime.Parse(reader["LastAccessTime"].ToString());
                         }
                     }
