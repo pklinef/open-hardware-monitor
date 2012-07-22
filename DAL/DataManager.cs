@@ -667,7 +667,7 @@ namespace OpenHardwareMonitor.DAL
         /// <param name="max"></param>
         /// <param name="stddev"></param>
         /// <returns>true if inserted, false otherwise</returns>
-        public static bool InsertData(string name, string type, SensorType sensorType, int count, double sum, double sumOfSquares)
+        public static bool InsertData(List<AggregateContainer> dataToInsert)
         {
             return false;
         }
@@ -1009,12 +1009,15 @@ namespace OpenHardwareMonitor.DAL
 
         public class AggregateContainer
         {
-            public DateTime currentDay = DateTime.MinValue;
-            public double sum = 0;
-            public double max = 0;
-            public double min = 0;
-            public double sumOfSquares = 0;
-            public long count = 0;
+            public string Name;
+            public string Type;
+            public SensorType SensorType;
+            public DateTime CurrentDay = DateTime.MinValue;
+            public double Sum = 0;
+            public double Max = 0;
+            public double Min = 0;
+            public double SumOfSquares = 0;
+            public long Count = 0;            
         }
 
         public static void AggregateHistoricalData()
