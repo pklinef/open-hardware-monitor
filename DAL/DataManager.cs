@@ -125,6 +125,19 @@ namespace OpenHardwareMonitor.DAL
                         PRIMARY KEY (ComponentSensorID,
                         [Date],DateRange))",
 
+                     @"CREATE TABLE IF NOT EXISTS [Watermarks] (
+                        [WatermarkId] TEXT NOT NULL PRIMARY KEY,
+                        [Date] TIMESTAMP  NULL)",
+
+                    @"CREATE TABLE IF NOT EXISTS ServerAggregation
+                        (ComponentID INTEGER NOT NULL,
+                        SensorTypeID INTEGER NO NULL,
+                        [Count] INTEGER,
+                        [Sum] REAL,
+                        SumOfSquares REAL,
+                        [Min] REAL,
+                        [Max] REAL,
+                        PRIMARY KEY (ComponentID, SensorTypeID))",
                 };
 
                 foreach (String statement in createStatements)
@@ -429,7 +442,7 @@ namespace OpenHardwareMonitor.DAL
         {
             if (String.IsNullOrEmpty(name))
             {
-                throw new ArgumentException("Name must not be null or empty", "name");
+                throw new ArgumentException("Name must not be null or empty", "type");
             }
 
             if (String.IsNullOrEmpty(type))
@@ -669,6 +682,72 @@ namespace OpenHardwareMonitor.DAL
         /// <returns>true if inserted, false otherwise</returns>
         public static bool InsertData(List<AggregateContainer> dataToInsert)
         {
+            using (SQLiteTransaction dbTrans = s_dataManager._sqliteConnection.BeginTransaction()) 
+            {                
+                try
+                {
+                    foreach (AggregateContainer container in dataToInsert)
+                    {
+                        // Type cannot be null
+                        if (container.Type == null)
+                        {
+                            continue;
+                        }
+
+                        long componentId = GetComponentId(container.Name, container.Type);                        
+
+                        bool alreadyExists = false;
+
+                        using (SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                        {
+                            const string c_dataExistsQuery = "SELECT ComponentID FROM ServerAggregation WHERE ComponentID = @componentID AND SensorTypeID = @sensorTypeID";
+                            sqlQueryCommand.CommandText = c_dataExistsQuery;
+                            sqlQueryCommand.Parameters.Add(new SQLiteParameter("@componentID", componentId));
+                            sqlQueryCommand.Parameters.Add(new SQLiteParameter("@sensorTypeID", container.SensorType));
+                            using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
+                            {
+                                if (reader.Read())
+                                {
+                                    alreadyExists = true;
+                                }
+                            }
+                        }
+
+                        using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                        {
+                            const string c_sqlCommandAlreadyExists =
+                                @"UPDATE ServerAggregation 
+                                    SET [Count] = [Count] + @count, 
+                                    [Sum] = [Sum] + @sum, 
+                                    SumOfSquares = SumOfSquares + @sumOfSquares, 
+                                    [Min] = CASE WHEN ([Min] <= @min) THEN [Min] ELSE @min END, 
+                                    [Max] = CASE WHEN ([Max] >= @max) THEN [Max] ELSE @max END 
+                                    WHERE ComponentID = @componentID AND SensorTypeID = @sensorTypeID;";
+                            const string c_sqlCommandInsert =
+                                @"INSERT INTO ServerAggregation (ComponentID,SensorTypeID,Count,Sum,SumOfSquares,Min,Max) values (@componentID,@sensorTypeID,@count,@sum,@sumOfSquares,@min,@max);";
+                                
+                            sqlInsertCommand.CommandText = (alreadyExists) ? c_sqlCommandAlreadyExists : c_sqlCommandInsert;
+                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentID", componentId));
+                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sensorTypeID", container.SensorType));                            
+                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@count", container.Count));
+                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sum", container.Sum));
+                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sumOfSquares", container.SumOfSquares));
+                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@min", container.Min));
+                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@max", container.Max));
+
+                            sqlInsertCommand.ExecuteNonQuery();
+                        }
+                    }
+
+                    dbTrans.Commit();
+                    return true;
+                }
+                catch (Exception e)
+                {
+                    // Just eat it for now, we'll retry later
+                    dbTrans.Rollback();
+                }
+            }
             return false;
         }
 
@@ -836,44 +915,8 @@ namespace OpenHardwareMonitor.DAL
                     if (reader.HasRows)
                         return;
                 }
-                
-                //has this hardware component been added before?
-                Int64 componentId = -1;
-                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
-                {
-                    command.CommandText = "SELECT ComponentID FROM Component WHERE Name = '@componentName' AND Type = '@componentType'";
-                    command.Parameters.Add(new SQLiteParameter("@componentName", hardware.Name));
-                    command.Parameters.Add(new SQLiteParameter("@componentType", hardware.HardwareType.ToString()));
-                    reader = command.ExecuteReader();
 
-                    
-                    if (reader.HasRows)
-                    {
-                        while (reader.Read())
-                            componentId = Convert.ToInt64(reader["ComponentID"]);
-
-                    }
-                }
-
-                if (componentId == -1)
-                {
-                    using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
-                    {
-                        command.CommandText = "INSERT INTO Component (Name, Type) values (@componentName, @componentType)";
-                        command.Parameters.Add(new SQLiteParameter("@componentName", hardware.Name));
-                        command.Parameters.Add(new SQLiteParameter("@componentType", hardware.HardwareType.ToString()));
-                        command.ExecuteNonQuery();
-
-                        command.CommandText = "SELECT ComponentID FROM Component WHERE Name = @componentName AND Type = @componentType";
-                        command.Parameters.Add(new SQLiteParameter("@componentName", hardware.Name));
-                        command.Parameters.Add(new SQLiteParameter("@componentType", hardware.HardwareType.ToString()));
-                        reader = command.ExecuteReader();
-
-                        while (reader.Read())
-                            componentId = Convert.ToInt64(reader["ComponentID"]);
-
-                    }
-                }
+                Int64 componentId = GetComponentId(hardware);
 
                 using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
@@ -885,6 +928,51 @@ namespace OpenHardwareMonitor.DAL
                     command.ExecuteNonQuery();
                 }
             }
+        }
+
+        private static Int64 GetComponentId(Hardware.IHardware hardware)
+        {
+            SQLiteDataReader reader;
+                
+            //has this hardware component been added before?
+            Int64 componentId = -1;
+            using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+            {
+                command.CommandText = "SELECT ComponentID FROM Component WHERE Name = '@componentName' AND Type = '@componentType'";
+                command.Parameters.Add(new SQLiteParameter("@componentName", hardware.Name));
+                command.Parameters.Add(new SQLiteParameter("@componentType", hardware.HardwareType.ToString()));
+                reader = command.ExecuteReader();
+
+                if (reader.HasRows)
+                {
+                    while (reader.Read())
+                    {
+                        componentId = Convert.ToInt64(reader["ComponentID"]);
+                    }
+                }
+            }
+
+            if (componentId == -1)
+            {
+                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                {
+                    command.CommandText = "INSERT INTO Component (Name, Type) values (@componentName, @componentType)";
+                    command.Parameters.Add(new SQLiteParameter("@componentName", hardware.Name));
+                    command.Parameters.Add(new SQLiteParameter("@componentType", hardware.HardwareType.ToString()));
+                    command.ExecuteNonQuery();
+
+                    command.CommandText = "SELECT ComponentID FROM Component WHERE Name = @componentName AND Type = @componentType";
+                    command.Parameters.Add(new SQLiteParameter("@componentName", hardware.Name));
+                    command.Parameters.Add(new SQLiteParameter("@componentType", hardware.HardwareType.ToString()));
+                    reader = command.ExecuteReader();
+
+                    while (reader.Read())
+                    {
+                        componentId = Convert.ToInt64(reader["ComponentID"]);
+                    }
+                }
+            }
+            return componentId;
         }
 
         #endregion
