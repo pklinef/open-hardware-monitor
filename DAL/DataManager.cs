@@ -213,9 +213,53 @@ namespace OpenHardwareMonitor.DAL
         public static bool GetData(string name, string type, SensorType sensorType, out double average, out double min, out double max, out double stddev)
         {
             average = 0;
-            min = 0;
-            max = 0;
+            min = Double.MaxValue;
+            max = Double.MinValue;
             stddev = 0;
+            const string c_selectSensorDataWithName = "SELECT Count,Sum,SumOfSquares,Min,Max FROM ServerAggregation sa JOIN Component ct ON sa.ComponentId = ct.ComponentId WHERE ct.Name = @name AND ct.Type = @type AND sa.SensorTypeId = @sensorTypeId";
+            const string c_selectSensorDataWithoutName = "SELECT Count,Sum,SumOfSquares,Min,Max FROM ServerAggregation sa JOIN Component ct ON sa.ComponentId = ct.ComponentId WHERE ct.Type = @type AND sa.SensorTypeId = @sensorTypeId";
+
+            long count = 0;
+            double sum = 0;
+            double sumOfSquares = 0;
+
+            using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+            {
+                if (!String.IsNullOrEmpty(name))
+                {
+                    sqlSelectCommand.CommandText = c_selectSensorDataWithName;
+                    sqlSelectCommand.Parameters.Add(new SQLiteParameter("@name", name));
+                }
+                else
+                {
+                    sqlSelectCommand.CommandText = c_selectSensorDataWithoutName;
+                }
+                sqlSelectCommand.Parameters.Add(new SQLiteParameter("@type", type));
+                sqlSelectCommand.Parameters.Add(new SQLiteParameter("@sensorTypeId", (long)sensorType));
+
+                using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        double tempMin = Math.Min(min, Convert.ToDouble(reader["Min"]));
+                        min = Math.Min(min, tempMin);
+
+                        double tempMax = Math.Min(min, Convert.ToDouble(reader["Max"]));
+                        min = Math.Max(max, tempMax);
+                        
+                        count += Convert.ToInt64(reader["Count"]);
+                        sum += Convert.ToDouble(reader["Sum"]);
+                        sumOfSquares += Convert.ToDouble(reader["SumOfSquares"]);
+                    }
+
+                    if (count > 0)
+                    {
+                        average = (double)sum / count;
+                        stddev = Math.Sqrt((sumOfSquares / count) - (average * average));
+                        return true;
+                    }
+                }
+            }
             return false;
         }
 
@@ -742,7 +786,7 @@ namespace OpenHardwareMonitor.DAL
                     dbTrans.Commit();
                     return true;
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     // Just eat it for now, we'll retry later
                     dbTrans.Rollback();
@@ -1291,12 +1335,87 @@ namespace OpenHardwareMonitor.DAL
                         }
 
                         List<AggregateContainer> dataToSendToServer = new List<AggregateContainer>();
-                        // TODO: Get the data to send to server since last watermark
-                        //bool sendToServerSuccess = SendToServer(dataToSendToServer);
-                        //if (sendToServerSuccess)
-                        //{
-                        //    // TODO: Update watermark
-                        //}
+                        DateTime lastWatermark = DateTime.MinValue;
+
+                        // NOTE: SQL does not support "TOP 1", so we'll just read one
+                        const string c_selecttWatermark = "SELECT Date FROM Watermarks WHERE WatermarkId = @watermarkId ORDER BY Date DESC";
+
+                        // If the row already exists, we need to add the data together
+                        using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                        {
+                            sqlSelectCommand.CommandText = c_selecttWatermark;
+                            sqlSelectCommand.Parameters.Add(new SQLiteParameter("@watermarkId", "ServerWatermark"));
+
+                            using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
+                            {
+                                if (reader.Read())
+                                {
+                                    lastWatermark = Convert.ToDateTime(reader["Date"]);
+
+                                    // Go ahead and add one day so we don't resend data
+                                    lastWatermark = lastWatermark.AddDays(1);
+                                }
+                            }
+                        }
+
+                        const string c_selecttHistoricalData1 = "SELECT Name,Type,SensorTypeId,Date,Count,Sum,SumOfSquares,Min,Max FROM HistoricalAggregation ha JOIN ComponentSensor cs ON cs.ComponentSensorId = ha.ComponentSensorId JOIN Component ct ON ct.ComponentId = ha.ComponentSensorId WHERE Date <= @maxDate AND Date >= @minDate AND DateRange = @dateRange ORDER BY Date ASC";
+
+                        // If the row already exists, we need to add the data together
+                        using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                        {
+                            sqlSelectCommand.CommandText = c_selecttHistoricalData1;
+                            sqlSelectCommand.Parameters.Add(new SQLiteParameter("@maxDate", dayFloorTime.AddDays(-1)));
+                            sqlSelectCommand.Parameters.Add(new SQLiteParameter("@minDate", lastWatermark));
+                            sqlSelectCommand.Parameters.Add(new SQLiteParameter("@dateRange", DateRangeType.day));
+
+                            using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
+                            {
+                                while (reader.Read())
+                                {
+                                    AggregateContainer container = new AggregateContainer();
+
+                                    long sensorType = Convert.ToInt64(reader["SensorTypeId"]);
+                                    container.SensorType = (SensorType)sensorType;
+                                    container.Name = Convert.ToString(reader["Name"]);
+                                    container.Type = Convert.ToString(reader["Type"]);
+                                    container.CurrentDay = Convert.ToDateTime(reader["Date"]);
+                                    container.Count = Convert.ToInt64(reader["Count"]);
+                                    container.Sum = Convert.ToDouble(reader["Sum"]);
+                                    container.SumOfSquares = Convert.ToDouble(reader["SumOfSquares"]);
+                                    container.Min = Convert.ToDouble(reader["Min"]);
+                                    container.Max = Convert.ToDouble(reader["Max"]);
+
+                                    dataToSendToServer.Add(container);
+                                }                                
+                            }
+                        }
+
+                        bool sendToServerSuccess = false; // SendToServer(dataToSendToServer);
+                        if (sendToServerSuccess)
+                        {
+                            if (lastWatermark > DateTime.MinValue)
+                            {
+                                const string c_insertNewWatermark = "UPDATE Watermarks SET Date = @date WHERE WatermarkId = @watermarkId";
+                                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                                {
+                                    command.CommandText = c_insertNewWatermark;
+                                    command.Parameters.Add(new SQLiteParameter("@watermarkId", "ServerWatermark"));
+                                    command.Parameters.Add(new SQLiteParameter("@date", dayFloorTime.AddDays(-1)));
+                                    command.ExecuteNonQuery();
+                                }
+                            }
+                            else
+                            {
+                                const string c_insertNewWatermark = "INSERT INTO Watermarks (WatermarkId,Date) values (@watermarkId,@date)";
+                                using (SQLiteCommand command = new SQLiteCommand(s_dataManager._sqliteConnection))
+                                {
+                                    command.CommandText = c_insertNewWatermark;
+                                    command.Parameters.Add(new SQLiteParameter("@watermarkId", "ServerWatermark"));
+                                    command.Parameters.Add(new SQLiteParameter("@date", dayFloorTime.AddDays(-1)));
+                                    command.ExecuteNonQuery();
+                                }
+                            }
+                        }
 
                         const string c_deleteSensorData = "DELETE FROM HistoricalAggregation WHERE Date < @date AND DateRange = @dateRange";
                         using (SQLiteCommand sqlDeleteCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
