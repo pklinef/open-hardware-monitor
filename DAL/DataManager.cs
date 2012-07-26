@@ -1077,23 +1077,27 @@ namespace OpenHardwareMonitor.DAL
         #region Helper Methods
         private static DateTime RoundDownToHour(DateTime dt)
         {
+            dt = dt.ToUniversalTime();
             DateTime retVal = new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, 0, 0, DateTimeKind.Utc);
             return retVal;
         }
 
         private static DateTime RoundDownToDay(DateTime dt)
         {
+            dt = dt.ToUniversalTime();
             return dt.Date;
         }
 
         private static DateTime RoundDownToMinute(DateTime dt)
         {
+            dt = dt.ToUniversalTime();
             DateTime retVal = new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, 0, DateTimeKind.Utc);
             return retVal;
         }
 
         private static DateTime RoundDownToSecond(DateTime dt)
         {
+            dt = dt.ToUniversalTime();
             DateTime retVal = new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second, DateTimeKind.Utc);
             return retVal;
         }
