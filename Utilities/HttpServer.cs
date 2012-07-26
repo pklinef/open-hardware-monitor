@@ -9,6 +9,7 @@
 */
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using System.Net;
@@ -21,23 +22,34 @@ using System.Reflection;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
+using Lidgren.Network;
+using System.Diagnostics;
 
 namespace OpenHardwareMonitor.Utilities
 {
     public class HttpServer
     {
         private HttpListener listener;
-        private int listenerPort, nodeCount;
+        private int listenerHttpPort, nodeCount;
         private Thread listenerThread;
         private Node root;
+        private NetPeer peer;
+        private static Hashtable peers = new Hashtable();
 
         public HttpServer(Node r, int p)
         {
             root = r;
-            listenerPort = p;
+            listenerHttpPort = p;
             //JSON node count. 
             nodeCount = 0;
             listener = new HttpListener();
+
+            NetPeerConfiguration config = new NetPeerConfiguration("OpenHardwareMonitor");
+            config.Port = p + 1;
+            config.EnableMessageType(NetIncomingMessageType.DiscoveryResponse);
+            config.EnableMessageType(NetIncomingMessageType.DiscoveryRequest);
+            peer = new NetPeer(config);
+            peer.RegisterReceivedCallback(new SendOrPostCallback(HandlePeerMessages));
         }
 
         public Boolean startHTTPListener()
@@ -47,7 +59,8 @@ namespace OpenHardwareMonitor.Utilities
                 if (listener.IsListening)
                     return true;
 
-                string prefix = "http://+:" + listenerPort + "/";
+                string prefix = "http://+:" + listenerHttpPort + "/";
+                AddPortToFirewall(listenerHttpPort);
                 listener.Prefixes.Clear();
                 listener.Prefixes.Add(prefix);
                 listener.Start();
@@ -63,7 +76,35 @@ namespace OpenHardwareMonitor.Utilities
                 return false;
             }
 
+            peer.Start();
+            peer.DiscoverLocalPeers(peer.Port);
+
             return true;
+        }
+
+        public static void AddPortToFirewall(int port)
+        {
+            // HACK to add port exception to Windows Firewall since HTTPListener uses HTTP.sys
+            // for Windows Vista and up only
+
+            // remove current OpenHardwareMonitor port in case it has changed
+            string deleteRuleArgs = @"advfirewall firewall delete rule name=OpenHardwareMonitor";
+            RunNetsh(deleteRuleArgs);
+
+            // add current OpenHardwareMonitor port
+            string createRuleArgs = string.Format(@"advfirewall firewall add rule name=OpenHardwareMonitor dir=in action=allow protocol=TCP localport={0}", port);
+            RunNetsh(createRuleArgs);
+        }
+
+        public static void RunNetsh(string args)
+        {
+            ProcessStartInfo psi = new ProcessStartInfo("netsh", args);
+            psi.Verb = "runas";
+            psi.CreateNoWindow = true;
+            psi.WindowStyle = ProcessWindowStyle.Hidden;
+            psi.UseShellExecute = false;
+
+            Process.Start(psi).WaitForExit();
         }
 
         public Boolean stopHTTPListener()
@@ -86,12 +127,54 @@ namespace OpenHardwareMonitor.Utilities
             catch (Exception)
             {
             }
+
+            peer.Shutdown("bye");
+
             return true;
+        }
+
+        public static void HandlePeerMessages(object peer)
+        {
+            if (peer is NetPeer)
+            {
+                NetPeer p = ((NetPeer)peer);
+                NetIncomingMessage msg = ((NetPeer)peer).ReadMessage();
+                string machineName;
+                switch (msg.MessageType)
+                {
+                    case NetIncomingMessageType.DiscoveryRequest:
+                        Console.WriteLine("DiscoveryRequest from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port);
+
+                        NetOutgoingMessage requestResponse = p.CreateMessage();
+                        requestResponse.Write(Environment.MachineName);
+
+                        p.SendDiscoveryResponse(requestResponse, msg.SenderEndpoint);
+                        break;
+                    case NetIncomingMessageType.DiscoveryResponse:
+                        machineName = msg.ReadString();
+                        peers.Add(msg.SenderEndpoint, machineName);
+                        Console.WriteLine("DiscoveryResponse from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port +
+                            " machine name: " + machineName);
+
+                        NetConnection senderConn = p.Connect(msg.SenderEndpoint);
+                        NetOutgoingMessage response = p.CreateMessage();
+                        response.Write(Environment.MachineName);
+                        p.SendMessage(response, senderConn, NetDeliveryMethod.ReliableUnordered);
+
+                        break;
+                    case NetIncomingMessageType.Data:
+                        machineName = msg.ReadString();
+                        peers.Add(msg.SenderEndpoint, machineName);
+                        Console.WriteLine("DiscoveryResponse from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port +
+                            " machine name: " + machineName);
+                        break;
+                }
+                p.Recycle(msg);
+            }
         }
 
         public void HandleRequests()
         {
-
             while (listener.IsListening)
             {
                 var context = listener.BeginGetContext(new AsyncCallback(ListenerCallback), listener);
@@ -126,6 +209,12 @@ namespace OpenHardwareMonitor.Utilities
                     return;
                 }
                 SendTreeJSON(context);
+                return;
+            }
+
+            if (requestedFile == "peers.json")
+            {
+                SendPeersJSON(context);
                 return;
             }
 
@@ -298,6 +387,33 @@ namespace OpenHardwareMonitor.Utilities
             outputStream.Write(buffer, 0, buffer.Length);
             outputStream.Close();
 
+        }
+
+        private void SendPeersJSON(HttpListenerContext context)
+        {
+            string JSON = "{\"peers\": [";
+            foreach (NetConnection conn in peer.Connections)
+            {
+                JSON += "{";
+                JSON += "\"name\":\"" + peers[conn.RemoteEndpoint] + "\", ";
+                JSON += "\"address\":\"" + conn.RemoteEndpoint.Address + ":" + (conn.RemoteEndpoint.Port - 1) + "\"";
+                JSON += "}, ";
+            }
+            if (JSON.EndsWith(", "))
+            {
+                JSON = JSON.Remove(JSON.LastIndexOf(","));
+            }
+            JSON += "]}";
+
+            var responseContent = JSON;
+            byte[] buffer = Encoding.UTF8.GetBytes(responseContent);
+
+            context.Response.ContentLength64 = buffer.Length;
+            context.Response.ContentType = "application/json";
+
+            Stream outputStream = context.Response.OutputStream;
+            outputStream.Write(buffer, 0, buffer.Length);
+            outputStream.Close();
         }
 
         private string generateJSON(Node n)
@@ -567,8 +683,8 @@ namespace OpenHardwareMonitor.Utilities
 
         public int ListenerPort
         {
-            get { return listenerPort; }
-            set { listenerPort = value; }
+            get { return listenerHttpPort; }
+            set { listenerHttpPort = value; }
         }
 
         ~HttpServer()
