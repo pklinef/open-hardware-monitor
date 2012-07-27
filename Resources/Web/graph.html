@@ -1,12 +1,23 @@
-﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-GB">
+﻿<!DOCTYPE html>
+<html lang="en">
 <head>
-	<title>CS411 Telekinetic Crowbar Gaiden</title>    
-    <meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7; IE=EmulateIE9"> 
+    <title>Open Hardware Monitor</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7; IE=EmulateIE9" />
+
     <!--[if IE]>
     <script type="text/javascript" src="js/excanvas.js"></script>
-    <![endif]--> 
+    <![endif]-->
+
     <script type='text/javascript' src='js/jquery-1.7.2.min.js'></script>
+
+    <!-- Bootstrap -->
+    <link href="css/bootstrap.css" rel="stylesheet" />
+    <link href="css/bootstrap-responsive.css" rel="stylesheet" />
+
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="js/html5.js"></script>
+    <![endif]-->
 
     <link href="css/jquery.treeTable.css" rel="stylesheet" type="text/css" />
     <script type='text/javascript' src='js/jquery.treeTable.min.js'></script>
@@ -19,119 +30,102 @@
     <script type='text/javascript' src="js/anytime.c.js"></script>
 
     <script type='text/javascript' src='js/graph.js'></script>
-   <style type="text/css">
-       html, body
-       {
-           height: 100%;
-           padding: 0 0;
-       }
-       
-       #sensor
-       {
-           position: relative;
-           height: 100%;
-           margin: 20 20;
-       }
-       #main
-       {
-           width: 100%;
-           height: 100%;
-           margin: 0 0;
-           padding: 0 0;
-       }
-       #right
-       {
-           float: right;
-           width: 80%;
-           height: 100%;
-           margin: 0 0;
-       }
-       #sidebar
-       {
-           float: left;
-           width: 20%;
-           height: 100%;
-           margin: 0 0;
-       }
 
-       #rangeStart, #rangeEnd
-       {
-           background-image: url("images/calendar.png");
-           background-position: right center;
-           background-repeat: no-repeat;
-       }
-       
-       /* css for timepicker */
-       .ui-timepicker-div .ui-widget-header
-       {
-           margin-bottom: 8px;
-       }
-       .ui-timepicker-div dl
-       {
-           text-align: left;
-       }
-       .ui-timepicker-div dl dt
-       {
-           height: 25px;
-           margin-bottom: -25px;
-       }
-       .ui-timepicker-div dl dd
-       {
-           margin: 0 10px 10px 65px;
-       }
-       .ui-timepicker-div td
-       {
-           font-size: 90%;
-       }
-       .ui-tpicker-grid-label
-       {
-           background: none;
-           border: none;
-           margin: 0;
-           padding: 0;
-       }
-   </style>
-
-</head> 
-<body> 
-    <!--div id="header">
-        <h1>CS411 Telekinetic Crowbar Gaiden</h1>    
-    </div-->
-        <div id="main">
-            <div id="right">
-                <div id="sensor"> </div>
+    <style type="text/css">
+        #sensor
+        {
+            position: relative;
+            height: 700px;
+            width: 100%;
+            padding: 25px 0;
+        }
+        
+        #graph
+        {
+            float: right;
+            padding-left: 20px;
+        }
+        
+        @media (max-width: 768px)
+        {
+            #graph
+            {
+                float: none;
+                padding-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="main" class="container-fluid">
+        <div class="row-fluid">
+            <div id="graph" class="span9">
+                <div class="row-fluid">
+                    <div id="sensor">
+                    </div>
+                </div>
             </div>
-            <div id="sidebar">
-                <table border="0">
-                    <tr>
-                        <td> Start: <input type="text" id="rangeStart"  /> </td>
-                        <td> End: <input type="text" id="rangeEnd" /> </td>
-                    </tr>
-                    <tr>
-                        <td> <input type="button" id="rangeTenMinutes" value="10 Min" style="width:100px" />  </td>
-                        <td> <input type="button" id="rangeHour" value="Hour"  style="width:100px"/></td>
-                    </tr>
-                    <tr>
-                        <td> <input type="button" id="rangeToday" value="Today" style="width:100px" />  </td>
-                        <td> <input type="button" id="rangeDay" value="Day" style="width:100px" /> </td>
-                    </tr>
-                    <tr>
-                        <td> <input type="button" id="rangeWeek" value="Week" style="width:100px" /> </td>
-                        <td> <input id="refresh" type="button" value="Refresh Graph" style="width:100px" /> </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2"> Last Visit: <span id="lastAccessTime" /> </td>
-                    </tr>
-                </table>
-                <script id="tpl-node" type="text/template">
-                        <tr id="node-<%= nid %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>
-                            <td><% if (imageURL){ %><img src="<%= imageURL %>"/><% } %>&nbsp; <%= text %></td>
-                            <td><%= type %></td>
-                            <td><% if (id.indexOf("-") != -1) { %><input type='radio' name='sensor_radios' value='<%= id %>' /><% } %></td>
-                        </tr> 
-                </script>
+            <div id="sidebar" class="span3">
+                <br />
+                <div class="well">
+                    <div class="row-fluid">
+                        <form>
+                        <fieldset>
+                            <div class="control-group">
+                                <label class="control-label" for="rangeStart">
+                                    Start</label>
+                                <div class="controls">
+                                    <input type="text" class="input-medium" id="rangeStart" />
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label class="control-label" for="rangeEnd">
+                                    End</label>
+                                <div class="controls">
+                                    <input type="text" class="input-medium" id="rangeEnd" />
+                                </div>
+                            </div>
+                        </fieldset>
+                        </form>
+                    </div>
+                    <div class="row-fluid">
+                        <div class="span12">
+                            <div class="btn-group" data-toggle="buttons-radio">
+                                <button class="btn" id="rangeTenMinutes">
+                                    10 Minutes</button>
+                                <button class="btn" id="rangeHour">
+                                    Hour</button>
+                                <!-- <button class="btn" id="rangeToday">Today</button> -->
+                                <button class="btn" id="rangeDay">
+                                    Day</button>
+                                <button class="btn" id="rangeWeek">
+                                    Week</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row-fluid">
+                        <div class="span12">
+                            <br />
+                            <input class="btn btn-inverse" id="refresh" type="button" value="Refresh Graph" />
+                        </div>
+                    </div>
+                    <div class="row-fluid">
+                        <div class="span12">
+                            <br />
+                            Last Visit: <span id="lastAccessTime" />
+                        </div>
+                    </div>
+                    <script id="tpl-node" type="text/template">
+                            <tr id="node-<%= nid %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>
+                                <td><% 
+                                    if (imageURL && id.indexOf("-") == -1){ %><img src="<%= imageURL %>"/><% } 
+                                    if (id.indexOf("-") != -1) { %><input type='radio' name='sensor_radios' value='<%= id %>' /><% }
+                                %>&nbsp; <%= text %></td>
+                            </tr> 
+                    </script>
+                </div>
             </div>
         </div>
-
-  </body> 
+    </div>
+</body>
 </html>

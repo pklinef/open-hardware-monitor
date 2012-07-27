@@ -303,6 +303,14 @@
     <EmbeddedResource Include="Resources\Web\js\dygraph-combined.js" />
     <EmbeddedResource Include="Resources\Web\js\excanvas.js" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Web\css\bootstrap-responsive.css" />
+    <EmbeddedResource Include="Resources\Web\css\bootstrap.css" />
+    <EmbeddedResource Include="Resources\Web\js\bootstrap.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Web\js\html5.js" />
+  </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio AllowExistingFolder="true" />
