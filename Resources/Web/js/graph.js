@@ -1,5 +1,4 @@
 $(window).load(function () {
-    var chart;
     var graph;
     var curSeries;
 
@@ -7,6 +6,7 @@ $(window).load(function () {
     //so that we don't traverse the DOM tree every time
     var startDateEl = $("#rangeStart");
     var endDateEl = $("#rangeEnd");
+    var statusEl = $("#status");
 
     var Node = Backbone.Model.extend({
         defaults: {
@@ -26,6 +26,7 @@ $(window).load(function () {
             this.set({"data":null}, {silent: true});
             this.set({"data":newData}, {silent: true});
             this.updateChart();
+            statusEl.text("Graph Updated.");
         },
 
         updateChart: function () {
@@ -57,7 +58,7 @@ $(window).load(function () {
 
     var Tree = Backbone.Collection.extend({
         model: Node,
-        url: '/sensors',
+        url: '/sensors'
     });
 
     var NodeView = Backbone.View.extend({
@@ -72,8 +73,8 @@ $(window).load(function () {
             return this;
         },
         plot: function () {
-            //if (chart) chart.showLoading();
             this.model.set({"data":null}, {silent: true});
+            statusEl.text("Fetching data ...");
             this.model.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
             return;
         }
@@ -108,7 +109,7 @@ $(window).load(function () {
             return;
         var curModel = coll.get($('input:radio[name=sensor_radios]:checked').val());
         curModel.set({"data":null}, {silent: true});
-        //chart.showLoading();
+        statusEl.text("Fetching data ...");
         curModel.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
     };
 
