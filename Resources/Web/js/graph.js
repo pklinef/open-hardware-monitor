@@ -171,6 +171,7 @@ $(window).load(function () {
     coll.fetch();
     setDefaultRange();
     $("#refresh").click(refreshChart);
+    $("#rangeTenMinutes").button("toggle");
 
     $.getJSON('lat.json', function(data) {
         $("#lastAccessTime").text(data.lastAccessTime);
