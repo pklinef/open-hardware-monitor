@@ -315,7 +315,7 @@ namespace OpenHardwareMonitor.DAL
                                 DataManagerData data = new DataManagerData();
                                 DateRangeType currentRangeType = (DateRangeType)Convert.ToInt32(reader["DateRange"]);
                                 data.TimeSpan = GetTimeSpanFromDateRangeType(currentRangeType);
-                                data.TimeStamp = Convert.ToDateTime(reader["Date"]);
+                                data.TimeStamp = DateTime.SpecifyKind(Convert.ToDateTime(reader["Date"]), DateTimeKind.Local).ToUniversalTime();
 
                                 // We'll always assume Count != 0 for this project
                                 data.Measure = Convert.ToDouble(reader["Sum"]) / (double)(Convert.ToInt64(reader["Count"]));
