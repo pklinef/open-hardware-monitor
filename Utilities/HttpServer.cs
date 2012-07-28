@@ -195,54 +195,63 @@ namespace OpenHardwareMonitor.Utilities
             HttpListenerRequest request = context.Request;
 
             var requestedFile = request.RawUrl.Substring(1);
-            if (requestedFile == "data.json")
-            {
-                sendJSON(context);
-                return;
-            }
 
-            if (requestedFile.Contains("sensors"))
+            try
             {
-                if (requestedFile.Contains("-"))
+
+                if (requestedFile == "data.json")
                 {
-                    SendSensorDataJSON(context);
+                    sendJSON(context);
                     return;
                 }
-                SendTreeJSON(context);
-                return;
-            }
 
-            if (requestedFile == "peers.json")
+                if (requestedFile.Contains("sensors"))
+                {
+                    if (requestedFile.Contains("-"))
+                    {
+                        SendSensorDataJSON(context);
+                        return;
+                    }
+                    SendTreeJSON(context);
+                    return;
+                }
+
+                if (requestedFile == "peers.json")
+                {
+                    SendPeersJSON(context);
+                    return;
+                }
+
+                if (requestedFile == "lat.json")
+                {
+                    SendLATJSON(context, lastAccessTime);
+                    return;
+                }
+
+                if (requestedFile.Contains("sensor.csv"))
+                {
+                    sendSensorCSV(context);
+                    return;
+                }
+
+                if (requestedFile.Contains("images_icon"))
+                {
+                    serveResourceImage(context, requestedFile.Replace("images_icon/", ""));
+                    return;
+                }
+
+                //default file to be served
+                if (string.IsNullOrEmpty(requestedFile))
+                    requestedFile = "index.html";
+
+                string[] splits = requestedFile.Split('.');
+                string ext = splits[splits.Length - 1];
+                serveResourceFile(context, "Web." + requestedFile.Replace('/', '.'), ext);
+            }
+            catch (HttpListenerException ex)
             {
-                SendPeersJSON(context);
-                return;
+                Console.WriteLine(ex.ToString());
             }
-
-            if (requestedFile == "lat.json")
-            {
-                SendLATJSON(context, lastAccessTime);
-                return;
-            }
-
-            if (requestedFile.Contains("sensor.csv"))
-            {
-                sendSensorCSV(context);
-                return;
-            }
-
-            if (requestedFile.Contains("images_icon"))
-            {
-                serveResourceImage(context, requestedFile.Replace("images_icon/", ""));
-                return;
-            }
-
-            //default file to be served
-            if (string.IsNullOrEmpty(requestedFile))
-                requestedFile = "index.html";
-
-            string[] splits = requestedFile.Split('.');
-            string ext = splits[splits.Length - 1];
-            serveResourceFile(context, "Web." + requestedFile.Replace('/', '.'), ext);
         }
 
         private void serveResourceFile(HttpListenerContext context ,string name, string ext) {
