@@ -35,16 +35,27 @@ $(window).load(function () {
             this.collection.bind("reset", this.render, this);
         },
         render: function (eventName) {
-            this.$el.html();
+            this.$el.html('');
 
+            if (eventName) {
+                // Add the refresh option to the peers list
+                var template = _.template($("#tpl-peer-divider").html(), {});
+                this.$el.append(template);
+                $("#refresh_peers").click(function (e) {
+                    peerList.$el.html('');
+                    statusEl.text("Fetching peer list ...");
+                    peers.fetch();
+                    return false;
+                });
+            }
             this.collection.each(function (peer) {
-                console.log(peer.get("address"));
                 var peerview = new PeerView({ model: peer });
                 var $li = peerview.render().$el;
                 this.$el.append($li);
             }, this);
 
             $('.dropdown-toggle').dropdown();
+            statusEl.text("Peer list updated");
             return this;
         }
     });
