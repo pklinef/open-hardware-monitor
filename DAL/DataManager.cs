@@ -11,7 +11,8 @@ using System.Net.NetworkInformation;
 using OpenHardwareMonitor.Hardware;
 
 namespace OpenHardwareMonitor.DAL
-{
+{    
+
     public class DataManagerData
     {
         public DateTime TimeStamp { get; set; }
@@ -21,6 +22,7 @@ namespace OpenHardwareMonitor.DAL
 
     public class DataManager
     {
+        private const double ThresholdMultiplier = 1.0;
         private static Object s_lockObject = new Object();
         private string _dbFile;
         private SQLiteConnection _sqliteConnection;
@@ -418,11 +420,84 @@ namespace OpenHardwareMonitor.DAL
             {
                 average = sum / count;
                 stddev = Math.Sqrt((sumOfSquares / count) - (average * average));
-            }
+            }            
 
             return retVal;
         }
 
+        public class AlertContainer
+        {
+            public string ComponentName { get; set; }
+            public string SensorName { get; set; }
+            public double AverageOverLastMinute { get; set; }
+            public SensorType SensorType { get; set; }
+        }
+
+        public List<AlertContainer> GetAlerts()
+        {
+            List<AlertContainer> retVal = new List<AlertContainer>();
+            lock (LastSamples)
+            {
+                List<long> warningsToRemove = new List<long>();
+                foreach (long componentSensorId in FlaggedWarnings)
+                {
+                    SensorReadingContainer readingContainer;
+                    if (LastSamples.TryGetValue(componentSensorId, out readingContainer))
+                    {
+                        if (readingContainer.WarnUntilTime < DateTime.UtcNow ||
+                            readingContainer.Readings.Count == 0)
+                        {
+                            warningsToRemove.Add(componentSensorId);
+                            continue;
+                        }
+
+                        AlertContainer container = new AlertContainer();
+                        container.AverageOverLastMinute = readingContainer.Sum / readingContainer.Readings.Count;
+
+                        const string c_selecttHistoricalData = 
+                            @"SELECT ct.Name,cs.SensorName, cs.SensorTypeId
+                             FROM ComponentCensor cs
+                             JOIN ComputerComponent cc
+                             ON cs.ComputerComponentId = cc.ComputerComponentId
+                             JOIN Component ct
+                             ON ct.ComponentId = cc.ComponentId 
+                             WHERE cs.ComponentSensorId = @componentSensorId";
+
+                        // If the row already exists, we need to add the data together
+                        using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                        {
+                            sqlSelectCommand.CommandText = c_selecttHistoricalData;
+                            sqlSelectCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
+                            
+                            using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
+                            {
+                                if (reader.Read())
+                                {
+                                    container.ComponentName = Convert.ToString(reader["Name"]);
+                                    container.SensorName = Convert.ToString(reader["SensorName"]);
+                                    long sensorTypeId = Convert.ToInt64(reader["SensorTypeID"]);
+                                    container.SensorType = (SensorType)sensorTypeId;
+
+                                    retVal.Add(container);                                    
+                                }
+                                else
+                                {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                foreach (long componentSensorId in warningsToRemove)
+                {
+                    FlaggedWarnings.Remove(componentSensorId);
+                }
+            }
+
+            return retVal;
+        }
+        
         public static long GetMacAddress
         {
             get
@@ -941,15 +1016,67 @@ namespace OpenHardwareMonitor.DAL
                 }
 
                 const string c_insertSensorData = "INSERT INTO SensorData (ComponentSensorID, Date, Value) values (@componentSensorId, @date, @Value)";
-
+                DateTime currentTime = DateTime.UtcNow;
                 using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
                 {
                     sqlInsertCommand.CommandText = c_insertSensorData;
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
-                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@date", DateTime.UtcNow));
+                    sqlInsertCommand.Parameters.Add(new SQLiteParameter("@date", currentTime));
                     sqlInsertCommand.Parameters.Add(new SQLiteParameter("@Value", value));
 
                     sqlInsertCommand.ExecuteNonQuery();
+                }
+
+                if (sensorTypeID == (long)SensorType.Temperature)
+                {
+                    lock (LastSamples)
+                    {
+                        Dictionary<long, Threshold> thresholds = Thresholds;
+                        Threshold threshold;
+                        if (thresholds.TryGetValue(componentSensorId, out threshold))
+                        {
+                            SensorReadingContainer readingContainer;
+                            if (!LastSamples.TryGetValue(componentSensorId, out readingContainer))
+                            {
+                                readingContainer = new SensorReadingContainer();
+                                LastSamples[componentSensorId] = readingContainer;
+                            }
+
+                            // Remove old readings
+                            while (readingContainer.Readings.First != null &&
+                                readingContainer.Readings.First.Value.SampleTime < currentTime.AddSeconds(-60))
+                            {
+                                SensorReading currentReading = readingContainer.Readings.First.Value;
+                                readingContainer.Readings.RemoveFirst();
+
+                                if (//currentReading.Sum < threshold.LowerThreshold ||
+                                    currentReading.Sum > threshold.UpperThreshold)
+                                {
+                                    readingContainer.CountOutsideRange--;
+                                }
+                                readingContainer.Sum -= currentReading.Sum;
+                            }
+
+                            SensorReading lastReading = new SensorReading();
+                            lastReading.SumOfSquares = value * value;
+                            lastReading.Sum = value;
+                            lastReading.SampleTime = currentTime;
+                            lastReading.Count = 1;
+
+                            if (lastReading.Sum > threshold.UpperThreshold /*||
+                                lastReading.Sum < threshold.LowerThreshold*/)
+                            {
+                                readingContainer.CountOutsideRange++;
+                                if (readingContainer.CountOutsideRange > 30)
+                                {
+                                    readingContainer.WarnUntilTime = currentTime.AddMinutes(5);
+                                    FlaggedWarnings.Add(componentSensorId);
+                                }
+                            }
+                            readingContainer.Sum += lastReading.Sum;
+                            readingContainer.Readings.AddLast(lastReading);
+                        }
+                    }
                 }
             }
         }
@@ -1374,24 +1501,26 @@ namespace OpenHardwareMonitor.DAL
                             }
                         }
 
-                        const string c_selecttHistoricalData1 = 
-                            @"SELECT Name,Type,SensorTypeId,Date,Count,Sum,SumOfSquares,Min,Max 
+                        const string c_selecttHistoricalData1 =
+                            @"SELECT ha.ComponentSensorId,Name,Type,SensorTypeId,Date,Count,Sum,SumOfSquares,Min,Max 
                              FROM HistoricalAggregation ha 
                              JOIN ComponentSensor cs 
                              ON cs.ComponentSensorId = ha.ComponentSensorId 
+                             JOIN ComputerComponent cc
+                             ON cs.ComputerComponentId = cc.ComputerComponentId
                              JOIN Component ct
-                             ON ct.ComponentId = ha.ComponentSensorId 
+                             ON ct.ComponentId = cc.ComponentId 
                              WHERE Date <= @maxDate 
-                               AND Date >= @minDate 
                                AND DateRange = @dateRange 
                              ORDER BY Date ASC";
+
+                        Dictionary<long, SensorReading> readings = new Dictionary<long, SensorReading>();
 
                         // If the row already exists, we need to add the data together
                         using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
                         {
                             sqlSelectCommand.CommandText = c_selecttHistoricalData1;
                             sqlSelectCommand.Parameters.Add(new SQLiteParameter("@maxDate", dayFloorTime.AddDays(-1)));
-                            sqlSelectCommand.Parameters.Add(new SQLiteParameter("@minDate", lastWatermark));
                             sqlSelectCommand.Parameters.Add(new SQLiteParameter("@dateRange", DateRangeType.day));
 
                             using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
@@ -1400,6 +1529,7 @@ namespace OpenHardwareMonitor.DAL
                                 {
                                     AggregateContainer container = new AggregateContainer();
 
+                                    long componentSensorId = Convert.ToInt64(reader["ComponentSensorId"]);
                                     long sensorType = Convert.ToInt64(reader["SensorTypeId"]);
                                     container.SensorType = (SensorType)sensorType;
                                     container.Name = Convert.ToString(reader["Name"]);
@@ -1411,10 +1541,40 @@ namespace OpenHardwareMonitor.DAL
                                     container.Min = Convert.ToDouble(reader["Min"]);
                                     container.Max = Convert.ToDouble(reader["Max"]);
 
-                                    dataToSendToServer.Add(container);
+                                    SensorReading sensorReading;
+                                    if (!readings.TryGetValue(componentSensorId, out sensorReading))
+                                    {
+                                        sensorReading = new SensorReading();
+                                        readings[componentSensorId] = sensorReading;
+                                    }
+                                    
+                                    sensorReading.Count += container.Count;
+                                    sensorReading.Sum += container.Sum;
+                                    sensorReading.SumOfSquares += container.SumOfSquares;                                        
+                                    
+                                    if (container.CurrentDay > lastWatermark)
+                                    {
+                                        dataToSendToServer.Add(container);
+                                    }
                                 }                                
                             }
                         }
+
+                        Dictionary<long, Threshold> thresholds = new Dictionary<long, Threshold>();
+
+                        foreach (long key in readings.Keys)
+                        {
+                            SensorReading reading = readings[key];
+                            double average = (double)reading.Sum / reading.Count;
+                            double stddev = Math.Sqrt((reading.SumOfSquares / reading.Count) - (average * average));
+                            Threshold threshold = new Threshold();
+                            threshold.LowerThreshold = ThresholdMultiplier*(average - stddev);
+                            threshold.UpperThreshold = ThresholdMultiplier*(average + stddev);
+                            thresholds[key] = threshold;
+                        }
+
+                        // Atomically replace
+                        Thresholds = thresholds;
 
                         bool sendToServerSuccess = false; // SendToServer(dataToSendToServer);
                         if (sendToServerSuccess)
@@ -1460,6 +1620,38 @@ namespace OpenHardwareMonitor.DAL
                 }
             }
         }
+
+        private class SensorReading
+        {
+            public double Sum { get; set; }
+            public double SumOfSquares { get; set; }
+            public long Count { get; set; }
+            public DateTime SampleTime { get; set; }
+        }
+
+        private class SensorReadingContainer
+        {
+            public SensorReadingContainer()
+            {
+                this.Readings = new LinkedList<SensorReading>();
+                this.WarnUntilTime = DateTime.MinValue;
+            }
+
+            public LinkedList<SensorReading> Readings { get; private set;}
+            public int CountOutsideRange { get; set; }
+            public DateTime WarnUntilTime { get; set; }
+            public double Sum { get; set; }
+        }
+
+        private class Threshold
+        {
+            public double UpperThreshold { get; set; }
+            public double LowerThreshold { get; set; }
+        }
+
+        private static Dictionary<long, Threshold> Thresholds = new Dictionary<long,Threshold>();
+        private static Dictionary<long, SensorReadingContainer> LastSamples = new Dictionary<long, SensorReadingContainer>();
+        private static HashSet<long> FlaggedWarnings = new HashSet<long>();
         #endregion
 
         #region Transactions
