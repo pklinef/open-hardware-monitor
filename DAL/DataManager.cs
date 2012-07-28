@@ -216,8 +216,20 @@ namespace OpenHardwareMonitor.DAL
             min = Double.MaxValue;
             max = Double.MinValue;
             stddev = 0;
-            const string c_selectSensorDataWithName = "SELECT Count,Sum,SumOfSquares,Min,Max FROM ServerAggregation sa JOIN Component ct ON sa.ComponentId = ct.ComponentId WHERE ct.Name = @name AND ct.Type = @type AND sa.SensorTypeId = @sensorTypeId";
-            const string c_selectSensorDataWithoutName = "SELECT Count,Sum,SumOfSquares,Min,Max FROM ServerAggregation sa JOIN Component ct ON sa.ComponentId = ct.ComponentId WHERE ct.Type = @type AND sa.SensorTypeId = @sensorTypeId";
+            const string c_selectSensorDataWithName = 
+                @"SELECT Count,Sum,SumOfSquares,Min,Max 
+                 FROM ServerAggregation sa 
+                 JOIN Component ct ON sa.ComponentId = ct.ComponentId 
+                 WHERE ct.Name = @name 
+                   AND ct.Type = @type 
+                   AND sa.SensorTypeId = @sensorTypeId";
+
+            const string c_selectSensorDataWithoutName = 
+                @"SELECT Count,Sum,SumOfSquares,Min,Max 
+                 FROM ServerAggregation sa 
+                 JOIN Component ct ON sa.ComponentId = ct.ComponentId 
+                 WHERE ct.Type = @type 
+                   AND sa.SensorTypeId = @sensorTypeId";
 
             long count = 0;
             double sum = 0;
@@ -1362,7 +1374,17 @@ namespace OpenHardwareMonitor.DAL
                             }
                         }
 
-                        const string c_selecttHistoricalData1 = "SELECT Name,Type,SensorTypeId,Date,Count,Sum,SumOfSquares,Min,Max FROM HistoricalAggregation ha JOIN ComponentSensor cs ON cs.ComponentSensorId = ha.ComponentSensorId JOIN Component ct ON ct.ComponentId = ha.ComponentSensorId WHERE Date <= @maxDate AND Date >= @minDate AND DateRange = @dateRange ORDER BY Date ASC";
+                        const string c_selecttHistoricalData1 = 
+                            @"SELECT Name,Type,SensorTypeId,Date,Count,Sum,SumOfSquares,Min,Max 
+                             FROM HistoricalAggregation ha 
+                             JOIN ComponentSensor cs 
+                             ON cs.ComponentSensorId = ha.ComponentSensorId 
+                             JOIN Component ct
+                             ON ct.ComponentId = ha.ComponentSensorId 
+                             WHERE Date <= @maxDate 
+                               AND Date >= @minDate 
+                               AND DateRange = @dateRange 
+                             ORDER BY Date ASC";
 
                         // If the row already exists, we need to add the data together
                         using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
