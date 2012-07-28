@@ -391,7 +391,7 @@ namespace OpenHardwareMonitor.Utilities
 
         private void SendPeersJSON(HttpListenerContext context)
         {
-            string JSON = "{\"peers\": [";
+            string JSON = "[";
             foreach (NetConnection conn in peer.Connections)
             {
                 JSON += "{";
@@ -403,7 +403,7 @@ namespace OpenHardwareMonitor.Utilities
             {
                 JSON = JSON.Remove(JSON.LastIndexOf(","));
             }
-            JSON += "]}";
+            JSON += "]";
 
             var responseContent = JSON;
             byte[] buffer = Encoding.UTF8.GetBytes(responseContent);

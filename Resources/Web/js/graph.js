@@ -1,12 +1,53 @@
 $(window).load(function () {
     var graph;
-    var curSeries;
 
     //keeping track of the two datefields
     //so that we don't traverse the DOM tree every time
     var startDateEl = $("#rangeStart");
     var endDateEl = $("#rangeEnd");
     var statusEl = $("#status");
+
+    var Peer = Backbone.Model.extend({
+        defaults: {
+            name: '',
+            address: ''
+        }
+    });
+
+    var Peers = Backbone.Collection.extend({
+        model: Peer,
+        url: '/peers.json'
+    });
+
+    var PeerView = Backbone.View.extend({
+        template: _.template($('#tpl-peer').html()),
+        render: function (eventName) {
+            var html = this.template(this.model.toJSON());
+            this.setElement($(html));
+            return this;
+        }
+    });
+
+    var PeerList = Backbone.View.extend({
+        tagName: 'ul',
+        className: 'dropdown-menu',
+        initialize: function () {
+            this.collection.bind("reset", this.render, this);
+        },
+        render: function (eventName) {
+            this.$el.html();
+
+            this.collection.each(function (peer) {
+                console.log(peer.get("address"));
+                var peerview = new PeerView({ model: peer });
+                var $li = peerview.render().$el;
+                this.$el.append($li);
+            }, this);
+
+            $('.dropdown-toggle').dropdown();
+            return this;
+        }
+    });
 
     var Node = Backbone.Model.extend({
         defaults: {
@@ -15,18 +56,18 @@ $(window).load(function () {
             parent: '',
             type: '',
             imageURL: '',
-            data:''
+            data: ''
         },
         initialize: function () {
             this.bind("change:data", this.parseData);
         },
         parseData: function (e) {
             //convert the first column to Date objects
-            var newData = _.map(this.get("data"), function(row){ return [new Date(row[0]), row[1]]; });
-            this.set({"data":null}, {silent: true});
-            this.set({"data":newData}, {silent: true});
+            var newData = _.map(this.get("data"), function (row) { return [new Date(row[0]), row[1]]; });
+            this.set({ "data": null }, { silent: true });
+            this.set({ "data": newData }, { silent: true });
             this.updateChart();
-            statusEl.text("Graph Updated.");
+            statusEl.text("Graph updated");
         },
 
         updateChart: function () {
@@ -73,8 +114,8 @@ $(window).load(function () {
             return this;
         },
         plot: function () {
-            this.model.set({"data":null}, {silent: true});
-            statusEl.text("Fetching data ...");
+            this.model.set({ "data": null }, { silent: true });
+            statusEl.text("Fetching graph data ...");
             this.model.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
             return;
         }
@@ -108,61 +149,67 @@ $(window).load(function () {
         if (graph == null)
             return;
         var curModel = coll.get($('input:radio[name=sensor_radios]:checked').val());
-        curModel.set({"data":null}, {silent: true});
-        statusEl.text("Fetching data ...");
+        curModel.set({ "data": null }, { silent: true });
+        statusEl.text("Fetching graph data ...");
         curModel.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
     };
 
-    var setDefaultRange = function(e) {
-          var now = new Date();
-          var past = new Date(now - 10*60*1000);
-          startDateEl.val(rangeConv.format(past));
-          endDateEl.val(rangeConv.format(now)) 
-          refreshChart();
+    var setDefaultRange = function (e) {
+        var now = new Date();
+        var past = new Date(now - 10 * 60 * 1000);
+        startDateEl.val(rangeConv.format(past));
+        endDateEl.val(rangeConv.format(now))
+        refreshChart();
     }
 
     var rangeFormat = "%Y-%m-%d %T";
-    var rangeConv = new AnyTime.Converter({format:rangeFormat});
+    var rangeConv = new AnyTime.Converter({ format: rangeFormat });
 
-    $("#rangeToday").click( function(e) {
-      var day = new Date();
-      day.setHours(0,0,0,0);
-      startDateEl.val(rangeConv.format(day));
-      endDateEl.val(rangeConv.format(new Date())) 
-      refreshChart();
+    $("#rangeToday").click(function (e) {
+        var day = new Date();
+        day.setHours(0, 0, 0, 0);
+        startDateEl.val(rangeConv.format(day));
+        endDateEl.val(rangeConv.format(new Date()))
+        refreshChart();
     });
 
     $("#rangeTenMinutes").click(setDefaultRange);
 
-    $("#rangeHour").click( function(e) {
-      var now = new Date();
-      var past = new Date(now - 60*60*1000);
-      startDateEl.val(rangeConv.format(past));
-      endDateEl.val(rangeConv.format(now)) 
-      refreshChart();
+    $("#rangeHour").click(function (e) {
+        var now = new Date();
+        var past = new Date(now - 60 * 60 * 1000);
+        startDateEl.val(rangeConv.format(past));
+        endDateEl.val(rangeConv.format(now))
+        refreshChart();
     });
 
-    $("#rangeDay").click( function(e) {
-      var now = new Date();
-      var past = new Date(now - 24*60*60*1000);
-      startDateEl.val(rangeConv.format(past));
-      endDateEl.val(rangeConv.format(now)) 
-      refreshChart();
+    $("#rangeDay").click(function (e) {
+        var now = new Date();
+        var past = new Date(now - 24 * 60 * 60 * 1000);
+        startDateEl.val(rangeConv.format(past));
+        endDateEl.val(rangeConv.format(now))
+        refreshChart();
     });
 
-    $("#rangeWeek").click( function(e) {
-      var now = new Date();
-      var past = new Date(now - 7*24*60*60*1000);
-      startDateEl.val(rangeConv.format(past));
-      endDateEl.val(rangeConv.format(now)) 
-      refreshChart();
+    $("#rangeWeek").click(function (e) {
+        var now = new Date();
+        var past = new Date(now - 7 * 24 * 60 * 60 * 1000);
+        startDateEl.val(rangeConv.format(past));
+        endDateEl.val(rangeConv.format(now))
+        refreshChart();
     });
 
-    $("#rangeClear").click( function(e) {
-      startDateEl.val("").change(); } );
+    $("#rangeClear").click(function (e) {
+        startDateEl.val("").change();
+    });
 
-    startDateEl.AnyTime_picker({format:rangeFormat});
-    endDateEl.AnyTime_picker({format:rangeFormat});
+    startDateEl.AnyTime_picker({ format: rangeFormat });
+    endDateEl.AnyTime_picker({ format: rangeFormat });
+
+    var peers = new Peers();
+    var peerList = new PeerList({ collection: peers })
+    $("#peers_menu").append(peerList.render().el);
+    peers.fetch();
 
     var coll = new Tree();
     var view = new TreeView({ collection: coll })
@@ -174,7 +221,7 @@ $(window).load(function () {
     $("#refresh").click(refreshChart);
     $("#rangeTenMinutes").button("toggle");
 
-    $.getJSON('lat.json', function(data) {
+    $.getJSON('lat.json', function (data) {
         $("#lastAccessTime").text(data.lastAccessTime);
     });
 });

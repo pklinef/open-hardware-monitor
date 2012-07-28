@@ -14,6 +14,7 @@
     <link href="css/bootstrap.css" rel="stylesheet" />
     <link href="css/bootstrap-responsive.css" rel="stylesheet" />
     <script type='text/javascript' src='js/bootstrap.js'></script>
+    <script type='text/javascript' src='js/bootstrap-dropdown.js'></script>
 
     <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
     <!--[if lt IE 9]>
@@ -58,7 +59,49 @@
     </style>
 </head>
 <body>
+    <div class="navbar navbar-static">
+            <div class="navbar-inner">
+              <div style="width: auto;" class="container">
+                <a href="#" class="brand">Team Drop Table</a>
+                <ul class="nav">
+                     <li class="dropdown" id="peers_menu">
+                        <a class="dropdown-toggle" data-toggle="dropdown" href="#menu1">
+                        Peer Computers
+                        <b class="caret"></b>
+                        </a>
+                    </li>
+                </ul>
+                <div class="nav btn-group" data-toggle="buttons-radio">
+                    <button class="btn btn-inverse" id="rangeTenMinutes">
+                        10 Minutes</button>
+                    <button class="btn btn-inverse" id="rangeHour">
+                        Hour</button>
+                    <!-- <button class="btn" id="rangeToday">Today</button> -->
+                    <button class="btn btn-inverse" id="rangeDay">
+                        Day</button>
+                    <button class="btn btn-inverse" id="rangeWeek">
+                        Week</button>
+                </div>
+                <div class="navbar-search">
+                        <input type="text" class="input-medium" id="rangeStart" />
+                </div>
+                <div class="navbar-search">
+                        <input type="text" class="input-medium" id="rangeEnd" />
+                </div>
+                <input class="btn btn-inverse" id="refresh" type="button" value="Refresh Graph" />
+                <div class="pull-right">
+                <div>
+                    Last Visit: <span id="lastAccessTime" /> 
+                </div>
+                <div>
+                    Status: <span id="status" />
+                </div>
+                </div>
+              </div>
+            </div>
+    </div>
     <div id="main" class="container-fluid">
+
         <div class="row-fluid">
             <div id="graph" class="span9">
                 <div class="row-fluid">
@@ -67,69 +110,21 @@
                 </div>
             </div>
             <div id="sidebar" class="span3">
-                <br />
-                <div class="well">
-                    <div class="row-fluid">
-                        <form>
-                        <fieldset>
-                            <div class="control-group">
-                                <label class="control-label" for="rangeStart">
-                                    Start</label>
-                                <div class="controls">
-                                    <input type="text" class="input-medium" id="rangeStart" />
-                                </div>
-                            </div>
-                            <div class="control-group">
-                                <label class="control-label" for="rangeEnd">
-                                    End</label>
-                                <div class="controls">
-                                    <input type="text" class="input-medium" id="rangeEnd" />
-                                </div>
-                            </div>
-                        </fieldset>
-                        </form>
-                    </div>
-                    <div class="row-fluid">
-                        <div class="span12">
-                            <div class="btn-group" data-toggle="buttons-radio">
-                                <button class="btn" id="rangeTenMinutes">
-                                    10 Minutes</button>
-                                <button class="btn" id="rangeHour">
-                                    Hour</button>
-                                <!-- <button class="btn" id="rangeToday">Today</button> -->
-                                <button class="btn" id="rangeDay">
-                                    Day</button>
-                                <button class="btn" id="rangeWeek">
-                                    Week</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="row-fluid">
-                        <div class="span12">
-                            <br />
-                            <input class="btn btn-inverse" id="refresh" type="button" value="Refresh Graph" />
-                        </div>
-                    </div>
-                            <br />
-                    <div class="row-fluid">
-                        <div class="alert alert-info">
-                            Last Visit: <span id="lastAccessTime" />
-                        </div>
-                    </div>
-                    <div class="row-fluid">
-                        <div class="alert alert-info">
-                            Status: <span id="status" />
-                        </div>
-                    </div>
-                    <script id="tpl-node" type="text/template">
-                            <tr id="node-<%= nid %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>
-                                <td><% 
-                                    if (imageURL && id.indexOf("-") == -1){ %><img src="<%= imageURL %>"/><% } 
-                                    if (id.indexOf("-") != -1) { %><input type='radio' name='sensor_radios' value='<%= id %>' /><% }
-                                %>&nbsp; <%= text %></td>
-                            </tr> 
-                    </script>
-                </div>
+                <script id="tpl-node" type="text/template">
+                        <tr id="node-<%= nid %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>
+                            <td><% 
+                                if (imageURL && id.indexOf("-") == -1){ %><img src="<%= imageURL %>"/><% } 
+                                if (id.indexOf("-") != -1) { %><input type='radio' name='sensor_radios' value='<%= id %>' /><% }
+                            %>&nbsp; <%= text %></td>
+                        </tr> 
+                </script>
+                <script id="tpl-peer" type="text/template">
+                    <li><a href="http://<%= address %>/graph.html"><%if (name) {%><%= name %><% } else { %><%= address %> <% } %> </a></li>
+                </script>
+                <script id="tpl-peer-divider" type="text/template">
+                    <li><a href="#">Refresh List</a></li>
+                    <li class="divider"></li>
+                </script>
             </div>
         </div>
     </div>
