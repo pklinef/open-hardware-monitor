@@ -246,9 +246,6 @@ $(window).load(function () {
         startDateEl.val("").change();
     });
 
-    startDateEl.AnyTime_picker({ format: rangeFormat, placement: "inline" });
-    endDateEl.AnyTime_picker({ format: rangeFormat, placement: "inline" });
-
     var peers = new Peers();
     var peerList = new PeerList({ collection: peers })
     $("#peers_menu").append(peerList.render().el);
@@ -276,5 +273,12 @@ $(window).load(function () {
         else
             autoFlag = false;
         setupAutoRefresh();
+    });
+
+    startDateEl.focus(function () {
+        startDateEl.unbind('focus').AnyTime_picker({ format: rangeFormat, placement: "popup" }); ;
+    });
+    endDateEl.focus(function () {
+        endDateEl.unbind('focus').AnyTime_picker({ format: rangeFormat, placement: "popup" }); ;
     });
 });
