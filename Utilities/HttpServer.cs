@@ -156,10 +156,9 @@ namespace OpenHardwareMonitor.Utilities
                         Console.WriteLine("DiscoveryResponse from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port +
                             " machine name: " + machineName);
 
-                        NetConnection senderConn = p.Connect(msg.SenderEndpoint);
-                        NetOutgoingMessage response = p.CreateMessage();
-                        response.Write(Environment.MachineName);
-                        p.SendMessage(response, senderConn, NetDeliveryMethod.ReliableUnordered);
+                        NetOutgoingMessage hailMessage = p.CreateMessage();
+                        hailMessage.Write(Environment.MachineName);
+                        NetConnection senderConn = p.Connect(msg.SenderEndpoint, hailMessage);
 
                         break;
                     case NetIncomingMessageType.Data:
@@ -194,10 +193,19 @@ namespace OpenHardwareMonitor.Utilities
             HttpListenerContext context = listener.EndGetContext(result);
             HttpListenerRequest request = context.Request;
 
-            var requestedFile = request.RawUrl.Substring(1);
+            var requestedFile = request.Url.AbsolutePath.Substring(1);
 
             try
             {
+                if (request.QueryString.Count > 0)
+                {
+                    List<string> keys = new List<string>(request.QueryString.AllKeys);
+                    if (keys.Contains("peer"))
+                    {
+                        proxyRequest(context, request.QueryString["peer"]);
+                        return;
+                    }
+                }
 
                 if (requestedFile == "data.json")
                 {
@@ -252,6 +260,34 @@ namespace OpenHardwareMonitor.Utilities
             {
                 Console.WriteLine(ex.ToString());
             }
+        }
+
+        private void proxyRequest(HttpListenerContext context, String peer)
+        {            
+            String address = String.Format("http://{0}{1}",peer,context.Request.Url.AbsolutePath);
+
+            try
+            {
+                WebClient client = new WebClient();
+                byte[] data = client.DownloadData(address);
+
+                Stream outputStream = context.Response.OutputStream;
+                outputStream.Write(data, 0, data.Length);
+                outputStream.Close();
+                return;
+            }
+            catch (WebException ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+            catch (NotSupportedException ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+
+            context.Response.OutputStream.Close();
+            context.Response.StatusCode = 404;
+            context.Response.Close();
         }
 
         private void serveResourceFile(HttpListenerContext context ,string name, string ext) {
