@@ -22,6 +22,7 @@ using Aga.Controls.Tree.NodeControls;
 using OpenHardwareMonitor.Hardware;
 using OpenHardwareMonitor.WMI;
 using OpenHardwareMonitor.Utilities;
+using OpenHardwareMonitor.DAL;
 
 namespace OpenHardwareMonitor.GUI {
   public partial class MainForm : Form {
@@ -223,6 +224,8 @@ namespace OpenHardwareMonitor.GUI {
       celsiusMenuItem.Checked = 
         unitManager.TemperatureUnit == TemperatureUnit.Celsius;
       fahrenheitMenuItem.Checked = !celsiusMenuItem.Checked;
+
+      HttpClient.ServerURL = this.settings.GetValue("dataServerAddress", "http://192.168.1.2:8080/aggregator");
 
       server = new HttpServer(root, this.settings.GetValue("listenerPort", 8085));
       runWebServer = new UserOption("runWebServerMenuItem", false,
@@ -460,6 +463,7 @@ namespace OpenHardwareMonitor.GUI {
           column.Width);
 
       this.settings.SetValue("listenerPort", server.ListenerPort);
+      this.settings.SetValue("dataServerAddress", HttpClient.ServerURL);
 
       string fileName = Path.ChangeExtension(
           System.Windows.Forms.Application.ExecutablePath, ".config");
@@ -762,6 +766,11 @@ namespace OpenHardwareMonitor.GUI {
 
     public HttpServer Server {
       get { return server; }
+    }
+
+    private void dataServerMenuItem_Click(object sender, EventArgs e)
+    {
+        new ServerAddressForm().ShowDialog();
     }
 
   }

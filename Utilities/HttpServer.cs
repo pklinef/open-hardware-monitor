@@ -24,6 +24,7 @@ using System.Drawing.Imaging;
 using System.Globalization;
 using Lidgren.Network;
 using System.Diagnostics;
+using Newtonsoft.Json;
 
 namespace OpenHardwareMonitor.Utilities
 {
@@ -213,6 +214,12 @@ namespace OpenHardwareMonitor.Utilities
                     return;
                 }
 
+                if (requestedFile.Contains("aggregator"))
+                {
+                    SaveAggregateData(context);
+                    return;
+                }
+
                 if (requestedFile.Contains("sensors"))
                 {
                     if (requestedFile.Contains("-"))
@@ -260,6 +267,32 @@ namespace OpenHardwareMonitor.Utilities
             {
                 Console.WriteLine(ex.ToString());
             }
+        }
+
+        private void SaveAggregateData(HttpListenerContext context)
+        {
+            var request = context.Request;
+            string json;
+            using (var reader = new StreamReader(request.InputStream,
+                                                 request.ContentEncoding))
+            {
+                json = reader.ReadToEnd();
+            }
+
+
+            HttpListenerResponse response = context.Response;
+            string responseString = "OK";
+
+            List<DataManager.AggregateContainer> data = JsonConvert.DeserializeObject<List<DataManager.AggregateContainer>>(json);
+            if (!DataManager.InsertData(data))
+                responseString = "Error";
+
+            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+            response.ContentLength64 = buffer.Length;
+            System.IO.Stream output = response.OutputStream;
+            output.Write(buffer, 0, buffer.Length);
+            output.Close();
+
         }
 
         private void proxyRequest(HttpListenerContext context, String peer)
