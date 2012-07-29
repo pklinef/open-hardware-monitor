@@ -140,6 +140,10 @@ namespace OpenHardwareMonitor.DAL
                         [Min] REAL,
                         [Max] REAL,
                         PRIMARY KEY (ComponentID, SensorTypeID))",
+
+                    @"CREATE TABLE IF NOT EXISTS [Registry] (
+                        [RegistryKey] VARCHAR(200)  PRIMARY KEY NULL,
+                        [RegistryValue] VARCHAR(200))",
                 };
 
                 foreach (String statement in createStatements)
@@ -151,6 +155,57 @@ namespace OpenHardwareMonitor.DAL
                     }
                 }
             }
+        }
+
+        private static string GetDataInRegistry(string registryKey)
+        {
+            string retVal = null;
+
+            const string c_selecttHistoricalData = "SELECT RegistryValue FROM Registry WHERE RegistryKey = @registryKey";
+
+            // If the row already exists, we need to add the data together
+            using (SQLiteCommand sqlSelectCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+            {
+                sqlSelectCommand.CommandText = c_selecttHistoricalData;
+                sqlSelectCommand.Parameters.Add(new SQLiteParameter("@registryKey", registryKey));
+                
+                using (SQLiteDataReader reader = sqlSelectCommand.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        retVal = Convert.ToString(reader["RegistryValue"]);
+                    }
+                }
+            }        
+
+            return retVal;
+        }
+
+        private static void SetDataInRegistry(string registryKey, string registryValue)
+        {
+            const string c_selecttHistoricalData = "INSERT OR REPLACE INTO Registry (RegistryKey, RegistryValue) VALUES(@registryKey, @registryValue)";
+
+            // If the row already exists, we need to add the data together
+            using (SQLiteCommand sqlCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+            {
+                sqlCommand.CommandText = c_selecttHistoricalData;
+                sqlCommand.Parameters.Add(new SQLiteParameter("@registryKey", registryKey));
+                sqlCommand.Parameters.Add(new SQLiteParameter("@registryValue", registryValue));
+                sqlCommand.ExecuteNonQuery();
+            }
+
+        }
+
+        public static void SetEmailSettings(string SMTPServer, string EmailAddress)
+        {
+            SetDataInRegistry("SMTPServer", SMTPServer);
+            SetDataInRegistry("EmailAddress", EmailAddress);
+        }
+
+        public static void GetEmailSettings(out string SMTPServer, out string EmailAddress)
+        {
+            SMTPServer = GetDataInRegistry("SMTPServer");
+            EmailAddress = GetDataInRegistry("EmailAddress");
         }
 
         private static void InitializeSensorTypeTable()
@@ -433,7 +488,7 @@ namespace OpenHardwareMonitor.DAL
             public SensorType SensorType { get; set; }
         }
 
-        public List<AlertContainer> GetAlerts()
+        public static List<AlertContainer> GetAlerts()
         {
             List<AlertContainer> retVal = new List<AlertContainer>();
             lock (LastSamples)
@@ -456,7 +511,7 @@ namespace OpenHardwareMonitor.DAL
 
                         const string c_selecttHistoricalData = 
                             @"SELECT ct.Name,cs.SensorName, cs.SensorTypeId
-                             FROM ComponentCensor cs
+                             FROM ComponentSensor cs
                              JOIN ComputerComponent cc
                              ON cs.ComputerComponentId = cc.ComputerComponentId
                              JOIN Component ct
@@ -484,6 +539,29 @@ namespace OpenHardwareMonitor.DAL
                                 {
                                     continue;
                                 }
+                            }
+                        }
+
+                        string smtpServer;
+                        string emailAddress;
+                        GetEmailSettings(out smtpServer, out emailAddress);
+
+                        if (!readingContainer.EmailSent && !String.IsNullOrEmpty(smtpServer) && !String.IsNullOrEmpty(emailAddress))
+                        {
+                            try
+                            {
+                                System.Net.Mail.MailMessage message = new System.Net.Mail.MailMessage();
+                                message.To.Add(emailAddress);
+                                message.Subject = "Alert: Your computer is running hotter than normal!";
+                                message.From = new System.Net.Mail.MailAddress(emailAddress);
+                                message.Body = "Alert: Your computer is running hotter than normal!\r\nName: " + container.ComponentName + "\r\nSensorName: " + container.SensorName + "\r\nAverage over last minute: " + container.AverageOverLastMinute;
+                                System.Net.Mail.SmtpClient smtp = new System.Net.Mail.SmtpClient(smtpServer);
+                                smtp.Send(message);
+                                readingContainer.EmailSent = true;
+                            }
+                            catch (Exception)
+                            {
+                                // We'll just eat these
                             }
                         }
                     }
@@ -1070,7 +1148,14 @@ namespace OpenHardwareMonitor.DAL
                                 if (readingContainer.CountOutsideRange > 30)
                                 {
                                     readingContainer.WarnUntilTime = currentTime.AddMinutes(5);
-                                    FlaggedWarnings.Add(componentSensorId);
+                                    if (!FlaggedWarnings.Contains(componentSensorId))
+                                    {
+                                        readingContainer.EmailSent = false;
+                                        FlaggedWarnings.Add(componentSensorId);
+
+                                        // This will trigger an email being sent if necessary
+                                        GetAlerts();            
+                                    }
                                 }
                             }
                             readingContainer.Sum += lastReading.Sum;
@@ -1641,6 +1726,7 @@ namespace OpenHardwareMonitor.DAL
             public int CountOutsideRange { get; set; }
             public DateTime WarnUntilTime { get; set; }
             public double Sum { get; set; }
+            public bool EmailSent { get; set; }
         }
 
         private class Threshold
