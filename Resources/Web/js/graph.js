@@ -1,6 +1,6 @@
 $(window).load(function () {
-    //$('#customDates').modal();
     var graph;
+    var refreshTimer;
 
     //keeping track of the two datefields
     //so that we don't traverse the DOM tree every time
@@ -180,7 +180,7 @@ $(window).load(function () {
         curModel.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
     };
 
-    var setDefaultRange = function (e) {
+    var setTenMinRange = function (e) {
         var now = new Date();
         var past = new Date(now - 10 * 60 * 1000);
         startDateEl.val(rangeConv.format(past));
@@ -188,43 +188,59 @@ $(window).load(function () {
         refreshChart();
     }
 
-
-    var rangeFormat = "%Y-%m-%d %T";
-    var rangeConv = new AnyTime.Converter({ format: rangeFormat });
-
-    $("#rangeToday").click(function (e) {
+    var setTodayRange = function (e) {
         var day = new Date();
         day.setHours(0, 0, 0, 0);
         startDateEl.val(rangeConv.format(day));
         endDateEl.val(rangeConv.format(new Date()))
         refreshChart();
-    });
-
-    $("#rangeTenMinutes").click(setDefaultRange);
-
-    $("#rangeHour").click(function (e) {
+    }
+    var setHourRange = function (e) {
         var now = new Date();
         var past = new Date(now - 60 * 60 * 1000);
         startDateEl.val(rangeConv.format(past));
         endDateEl.val(rangeConv.format(now))
         refreshChart();
-    });
-
-    $("#rangeDay").click(function (e) {
+    }
+    var setDayRange = function (e) {
         var now = new Date();
         var past = new Date(now - 24 * 60 * 60 * 1000);
         startDateEl.val(rangeConv.format(past));
         endDateEl.val(rangeConv.format(now))
         refreshChart();
-    });
-
-    $("#rangeWeek").click(function (e) {
+    }
+    var setWeekRange = function (e) {
         var now = new Date();
         var past = new Date(now - 7 * 24 * 60 * 60 * 1000);
         startDateEl.val(rangeConv.format(past));
         endDateEl.val(rangeConv.format(now))
         refreshChart();
-    });
+    }
+    var curRangeFn = setTenMinRange;
+    var autoFlag = false;
+
+    var setupAutoRefresh = function () {
+        if (autoFlag) {
+            console.log("Starting auto refresh");
+            clearInterval(refreshTimer);
+            refreshTimer = setInterval(curRangeFn, 5000);
+        }
+        else
+            clearInterval(refreshTimer);
+    }
+    var rangeFormat = "%Y-%m-%d %T";
+    var rangeConv = new AnyTime.Converter({ format: rangeFormat });
+
+
+    $("#rangeToday").click(function (e) { curRangeFn = setTodayRange; curRangeFn(); setupAutoRefresh(); });
+
+    $("#rangeTenMinutes").click(function (e) { curRangeFn = setTenMinRange; curRangeFn(); setupAutoRefresh(); });
+
+    $("#rangeHour").click(function (e) { curRangeFn = setHourRange; curRangeFn(); setupAutoRefresh(); });
+
+    $("#rangeDay").click(function (e) { curRangeFn = setDayRange; curRangeFn(); setupAutoRefresh(); });
+
+    $("#rangeWeek").click(function (e) { curRangeFn = setWeekRange; curRangeFn(); setupAutoRefresh(); });
 
     $("#rangeClear").click(function (e) {
         startDateEl.val("").change();
@@ -244,12 +260,21 @@ $(window).load(function () {
     $("#sidebar").append(view.render().el);
 
     coll.fetch();
-    setDefaultRange();
-    $("#refresh").click(refreshChart);
+    setTenMinRange();
+    $("#refresh").click(function (e) { curRangeFn(); });
     $("#dismissDates").click(refreshChart);
     $("#rangeTenMinutes").button("toggle");
 
     $.getJSON('lat.json', function (data) {
         $("#lastAccessTime").text(data.lastAccessTime);
+    });
+
+    $("#autoRefresh").click(function () {
+        if (!$(this).hasClass('active')) {
+            autoFlag = true;
+        }
+        else
+            autoFlag = false;
+        setupAutoRefresh();
     });
 });
