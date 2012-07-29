@@ -1578,7 +1578,7 @@ namespace OpenHardwareMonitor.DAL
                         // Atomically replace
                         Thresholds = thresholds;
 
-                        bool sendToServerSuccess = s_httpClient.SendToServer(dataToSendToServer);
+                        bool sendToServerSuccess = false; // s_httpClient.SendToServer(dataToSendToServer);
                         if (sendToServerSuccess)
                         {
                             if (lastWatermark > DateTime.MinValue)
