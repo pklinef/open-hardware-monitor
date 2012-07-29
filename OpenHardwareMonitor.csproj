@@ -311,9 +311,6 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\Web\js\html5.js" />
   </ItemGroup>
-  <ItemGroup>
-    <Content Include="Resources\Web\js\bootstrap-dropdown.js" />
-  </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio AllowExistingFolder="true" />

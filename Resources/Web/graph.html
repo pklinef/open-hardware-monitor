@@ -19,7 +19,6 @@
     <link href="css/bootstrap.css" rel="stylesheet" />
     <link href="css/bootstrap-responsive.css" rel="stylesheet" />
     <script type='text/javascript' src='js/bootstrap.js'></script>
-    <script type='text/javascript' src='js/bootstrap-dropdown.js'></script>
 
     <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
     <!--[if lt IE 9]>
@@ -86,12 +85,8 @@
                         Day</button>
                     <button class="btn btn-inverse" id="rangeWeek">
                         Week</button>
-                </div>
-                <div class="navbar-search">
-                        <input type="text" class="input-medium" id="rangeStart" />
-                </div>
-                <div class="navbar-search">
-                        <input type="text" class="input-medium" id="rangeEnd" />
+                    <button class="btn btn-inverse" data-toggle="modal" data-target="#customDates" id="rangeCustom">
+                        Custom</button>
                 </div>
                 <input class="btn btn-inverse" id="refresh" type="button" value="Refresh Graph" />
                 <div class="pull-right">
@@ -131,6 +126,23 @@
                     <li class="divider" id="refresh_divider" ></li>
                 </script>
             </div>
+        </div>
+    </div>
+    <div class="modal hide" data-backdrop="static" id="customDates">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal">×</button>
+            <h3>Set Custom Date-Time Range</h3>
+        </div>
+        <div class="modal-body">
+            <div style="width: 440px; height: 340px;">
+                <span class="label label-inverse">Start</span><input type="text" class="input-medium" id="rangeStart" />
+            </div>
+            <div style="width: 440px; height: 340px;">
+                <span class="label label-inverse">End</span><input type="text" class="input-medium" id="rangeEnd" />
+            </div>
+        </div>
+        <div class="modal-footer">
+            <input class="btn btn-primary" id="dismissDates" data-dismiss="modal" value="Close and Refresh Graph"/>
         </div>
     </div>
 </body>

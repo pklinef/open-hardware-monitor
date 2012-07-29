@@ -1,4 +1,5 @@
 $(window).load(function () {
+    //$('#customDates').modal();
     var graph;
 
     //keeping track of the two datefields
@@ -173,6 +174,7 @@ $(window).load(function () {
         refreshChart();
     }
 
+
     var rangeFormat = "%Y-%m-%d %T";
     var rangeConv = new AnyTime.Converter({ format: rangeFormat });
 
@@ -214,8 +216,8 @@ $(window).load(function () {
         startDateEl.val("").change();
     });
 
-    startDateEl.AnyTime_picker({ format: rangeFormat });
-    endDateEl.AnyTime_picker({ format: rangeFormat });
+    startDateEl.AnyTime_picker({ format: rangeFormat, placement: "inline" });
+    endDateEl.AnyTime_picker({ format: rangeFormat, placement: "inline" });
 
     var peers = new Peers();
     var peerList = new PeerList({ collection: peers })
@@ -230,6 +232,7 @@ $(window).load(function () {
     coll.fetch();
     setDefaultRange();
     $("#refresh").click(refreshChart);
+    $("#dismissDates").click(refreshChart);
     $("#rangeTenMinutes").button("toggle");
 
     $.getJSON('lat.json', function (data) {
