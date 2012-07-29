@@ -8,6 +8,7 @@ using System.IO;
 using System.Data;
 using System.Management;
 using System.Net.NetworkInformation;
+using System.Threading;
 using OpenHardwareMonitor.Hardware;
 
 namespace OpenHardwareMonitor.DAL
@@ -891,70 +892,73 @@ namespace OpenHardwareMonitor.DAL
         /// <returns>true if inserted, false otherwise</returns>
         public static bool InsertData(List<AggregateContainer> dataToInsert)
         {
-            using (SQLiteTransaction dbTrans = s_dataManager._sqliteConnection.BeginTransaction()) 
-            {                
-                try
+            lock (s_lockObject)
+            {
+                using (SQLiteTransaction dbTrans = s_dataManager._sqliteConnection.BeginTransaction())
                 {
-                    foreach (AggregateContainer container in dataToInsert)
+                    try
                     {
-                        // Type cannot be null
-                        if (container.Type == null)
+                        foreach (AggregateContainer container in dataToInsert)
                         {
-                            continue;
-                        }
-
-                        long componentId = GetComponentId(container.Name, container.Type);                        
-
-                        bool alreadyExists = false;
-
-                        using (SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
-                        {
-                            const string c_dataExistsQuery = "SELECT ComponentID FROM ServerAggregation WHERE ComponentID = @componentID AND SensorTypeID = @sensorTypeID";
-                            sqlQueryCommand.CommandText = c_dataExistsQuery;
-                            sqlQueryCommand.Parameters.Add(new SQLiteParameter("@componentID", componentId));
-                            sqlQueryCommand.Parameters.Add(new SQLiteParameter("@sensorTypeID", container.SensorType));
-                            using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
+                            // Type cannot be null
+                            if (container.Type == null)
                             {
-                                if (reader.Read())
+                                continue;
+                            }
+
+                            long componentId = GetComponentId(container.Name, container.Type);
+
+                            bool alreadyExists = false;
+
+                            using (SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                            {
+                                const string c_dataExistsQuery = "SELECT ComponentID FROM ServerAggregation WHERE ComponentID = @componentID AND SensorTypeID = @sensorTypeID";
+                                sqlQueryCommand.CommandText = c_dataExistsQuery;
+                                sqlQueryCommand.Parameters.Add(new SQLiteParameter("@componentID", componentId));
+                                sqlQueryCommand.Parameters.Add(new SQLiteParameter("@sensorTypeID", container.SensorType));
+                                using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
                                 {
-                                    alreadyExists = true;
+                                    if (reader.Read())
+                                    {
+                                        alreadyExists = true;
+                                    }
                                 }
                             }
-                        }
 
-                        using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
-                        {
-                            const string c_sqlCommandAlreadyExists =
-                                @"UPDATE ServerAggregation 
+                            using (SQLiteCommand sqlInsertCommand = new SQLiteCommand(s_dataManager._sqliteConnection))
+                            {
+                                const string c_sqlCommandAlreadyExists =
+                                    @"UPDATE ServerAggregation 
                                     SET [Count] = [Count] + @count, 
                                     [Sum] = [Sum] + @sum, 
                                     SumOfSquares = SumOfSquares + @sumOfSquares, 
                                     [Min] = CASE WHEN ([Min] <= @min) THEN [Min] ELSE @min END, 
                                     [Max] = CASE WHEN ([Max] >= @max) THEN [Max] ELSE @max END 
                                     WHERE ComponentID = @componentID AND SensorTypeID = @sensorTypeID;";
-                            const string c_sqlCommandInsert =
-                                @"INSERT INTO ServerAggregation (ComponentID,SensorTypeID,Count,Sum,SumOfSquares,Min,Max) values (@componentID,@sensorTypeID,@count,@sum,@sumOfSquares,@min,@max);";
-                                
-                            sqlInsertCommand.CommandText = (alreadyExists) ? c_sqlCommandAlreadyExists : c_sqlCommandInsert;
-                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentID", componentId));
-                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sensorTypeID", container.SensorType));                            
-                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@count", container.Count));
-                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sum", container.Sum));
-                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sumOfSquares", container.SumOfSquares));
-                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@min", container.Min));
-                            sqlInsertCommand.Parameters.Add(new SQLiteParameter("@max", container.Max));
+                                const string c_sqlCommandInsert =
+                                    @"INSERT INTO ServerAggregation (ComponentID,SensorTypeID,Count,Sum,SumOfSquares,Min,Max) values (@componentID,@sensorTypeID,@count,@sum,@sumOfSquares,@min,@max);";
 
-                            sqlInsertCommand.ExecuteNonQuery();
+                                sqlInsertCommand.CommandText = (alreadyExists) ? c_sqlCommandAlreadyExists : c_sqlCommandInsert;
+                                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@componentID", componentId));
+                                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sensorTypeID", container.SensorType));
+                                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@count", container.Count));
+                                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sum", container.Sum));
+                                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@sumOfSquares", container.SumOfSquares));
+                                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@min", container.Min));
+                                sqlInsertCommand.Parameters.Add(new SQLiteParameter("@max", container.Max));
+
+                                sqlInsertCommand.ExecuteNonQuery();
+                            }
                         }
-                    }
 
-                    dbTrans.Commit();
-                    return true;
-                }
-                catch (Exception)
-                {
-                    // Just eat it for now, we'll retry later
-                    dbTrans.Rollback();
+                        dbTrans.Commit();
+                        return true;
+                    }
+                    catch (Exception)
+                    {
+                        // Just eat it for now, we'll retry later
+                        dbTrans.Rollback();
+                    }
                 }
             }
             return false;
@@ -1744,6 +1748,7 @@ namespace OpenHardwareMonitor.DAL
 
         public static void BeginTransaction()
         {
+            Monitor.Enter(s_lockObject);
             if (!s_transactionStarted)
             {
                 SQLiteCommand command = new SQLiteCommand("begin", s_dataManager._sqliteConnection);
@@ -1760,6 +1765,7 @@ namespace OpenHardwareMonitor.DAL
                 command.ExecuteNonQuery();
                 s_transactionStarted = false;
             }
+            Monitor.Exit(s_lockObject);
         }
 
         #endregion
