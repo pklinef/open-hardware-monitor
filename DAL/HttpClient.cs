@@ -14,6 +14,9 @@ namespace OpenHardwareMonitor.DAL
         {
             try
             {
+                if (HttpClient.ServerURL == null || HttpClient.ServerURL == "")
+                    return false;
+
                 string json = JsonConvert.SerializeObject(dataToSendToServer, Formatting.Indented);
 
                 string RemoteUrl = HttpClient.ServerURL;
