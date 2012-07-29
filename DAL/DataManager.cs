@@ -1075,7 +1075,7 @@ namespace OpenHardwareMonitor.DAL
 
         public static void InsertSensorData(String computerComponentId, String sensorID, int sensorTypeID, double value)
         {
-            AggregateHistoricalData();
+            ThreadPool.QueueUserWorkItem(AggregateHistoricalData, null);
             lock (s_lockObject)
             {
                 Int64 componentSensorId = -1;
@@ -1384,7 +1384,7 @@ namespace OpenHardwareMonitor.DAL
             public long Count = 0;            
         }
 
-        public static void AggregateHistoricalData()
+        public static void AggregateHistoricalData(object unused)
         {
             DateTime currentTime = DateTime.UtcNow;
 
