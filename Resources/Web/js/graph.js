@@ -49,11 +49,19 @@ $(window).load(function () {
                     return false;
                 });
             }
+
+            // Add peers
             this.collection.each(function (peer) {
                 var peerview = new PeerView({ model: peer });
                 var $li = peerview.render().$el;
                 this.$el.append($li);
             }, this);
+
+            // Add local machine
+            if (coll && coll.models.length > 0) {
+                var peerview = new PeerView({ model: new Peer({ name: coll.models[0].toJSON().text, address: window.location.host }) });
+                this.$el.append(peerview.render().$el);
+            }
 
             $('.dropdown-toggle').dropdown();
             statusEl.text("Peer list updated");
@@ -141,6 +149,12 @@ $(window).load(function () {
         },
         render: function (eventName) {
             this.$el.html();
+
+            if (this.collection.length > 0) {
+                var computerName = this.collection.models[0].toJSON().text;
+                var peerview = new PeerView({ model: new Peer({ name: computerName, address: window.location.host }) });
+                $("#peers_menu ul.dropdown-menu").append(peerview.render().$el);
+            }
 
             this.collection.each(function (node) {
                 var nodeview = new NodeView({ model: node });
