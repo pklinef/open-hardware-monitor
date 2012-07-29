@@ -64,41 +64,43 @@
 </head>
 <body>
     <div class="navbar navbar-fixed-top">
-            <div class="navbar-inner">
-              <div style="width: auto;" class="container">
-                <a href="#" class="brand">Team Drop Table</a>
-                <ul class="nav">
-                     <li class="dropdown" id="peers_menu">
-                        <a class="dropdown-toggle" data-toggle="dropdown" href="#menu1">
-                        Peer Computers
-                        <b class="caret"></b>
-                        </a>
-                    </li>
-                </ul>
-                <div class="nav btn-group" data-toggle="buttons-radio">
-                    <button class="btn btn-inverse" id="rangeTenMinutes">
-                        10 Minutes</button>
-                    <button class="btn btn-inverse" id="rangeHour">
-                        Hour</button>
-                    <!-- <button class="btn" id="rangeToday">Today</button> -->
-                    <button class="btn btn-inverse" id="rangeDay">
-                        Day</button>
-                    <button class="btn btn-inverse" id="rangeWeek">
-                        Week</button>
-                    <button class="btn btn-inverse" data-toggle="modal" data-target="#customDates" id="rangeCustom">
-                        Custom</button>
+        <div class="navbar-inner">
+            <div style="width: auto;" class="container-fluid">
+                <div class="row-fluid">
+                    <div class="span5">
+                        <a href="#" class="brand">Team Drop Table</a>
+                        <ul class="nav">
+                            <li class="dropdown" id="peers_menu"><a class="dropdown-toggle" data-toggle="dropdown"
+                                href="#menu1">Peer Computers <b class="caret"></b></a></li>
+                        </ul>
+                    </div>
+                    <div class="span7">
+                        <div class="nav btn-group" data-toggle="buttons-radio">
+                            <button class="btn btn-inverse" id="rangeTenMinutes">
+                                10 Minutes</button>
+                            <button class="btn btn-inverse" id="rangeHour">
+                                Hour</button>
+                            <!-- <button class="btn" id="rangeToday">Today</button> -->
+                            <button class="btn btn-inverse" id="rangeDay">
+                                Day</button>
+                            <button class="btn btn-inverse" id="rangeWeek">
+                                Week</button>
+                            <button class="btn btn-inverse" data-toggle="modal" data-target="#customDates" id="rangeCustom">
+                                Custom</button>
+                        </div>
+                        <input class="btn btn-inverse" id="refresh" type="button" value="Refresh Graph" />
+                        <div class="pull-right">
+                            <div>
+                                Last Visit: <span id="lastAccessTime" />
+                            </div>
+                            <div>
+                                Status: <span id="status" />
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <input class="btn btn-inverse" id="refresh" type="button" value="Refresh Graph" />
-                <div class="pull-right">
-                <div>
-                    Last Visit: <span id="lastAccessTime" /> 
-                </div>
-                <div>
-                    Status: <span id="status" />
-                </div>
-                </div>
-              </div>
             </div>
+        </div>
     </div>
     <div id="main" class="container-fluid">
 
