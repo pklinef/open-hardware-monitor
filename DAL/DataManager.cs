@@ -35,6 +35,8 @@ namespace OpenHardwareMonitor.DAL
         private static DateTime s_lastHourAggregation = DateTime.MinValue;
         private static DateTime s_lastDayAggregation = DateTime.MinValue;
 
+        private static HttpClient s_httpClient = new HttpClient();
+
         private DataManager()
         {
             _dbFile = "ohm.db";
@@ -1665,7 +1667,7 @@ namespace OpenHardwareMonitor.DAL
                         // Atomically replace
                         Thresholds = thresholds;
 
-                        bool sendToServerSuccess = false; // SendToServer(dataToSendToServer);
+                        bool sendToServerSuccess = s_httpClient.SendToServer(dataToSendToServer);
                         if (sendToServerSuccess)
                         {
                             if (lastWatermark > DateTime.MinValue)
