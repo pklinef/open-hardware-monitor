@@ -53,15 +53,15 @@
             0,
             0});
             this.serverPortNumericUpDn.Minimum = new decimal(new int[] {
-            8080,
+            8085,
             0,
             0,
             0});
             this.serverPortNumericUpDn.Name = "serverPortNumericUpDn";
-            this.serverPortNumericUpDn.Size = new System.Drawing.Size(75, 20);
+            this.serverPortNumericUpDn.Size = new System.Drawing.Size(62, 20);
             this.serverPortNumericUpDn.TabIndex = 9;
             this.serverPortNumericUpDn.Value = new decimal(new int[] {
-            8080,
+            8085,
             0,
             0,
             0});
@@ -107,11 +107,6 @@
             this.numericUpDown1.Name = "numericUpDown1";
             this.numericUpDown1.Size = new System.Drawing.Size(50, 20);
             this.numericUpDown1.TabIndex = 14;
-            this.numericUpDown1.Value = new decimal(new int[] {
-            255,
-            0,
-            0,
-            0});
             // 
             // numericUpDown2
             // 
@@ -124,11 +119,6 @@
             this.numericUpDown2.Name = "numericUpDown2";
             this.numericUpDown2.Size = new System.Drawing.Size(50, 20);
             this.numericUpDown2.TabIndex = 15;
-            this.numericUpDown2.Value = new decimal(new int[] {
-            255,
-            0,
-            0,
-            0});
             // 
             // numericUpDown3
             // 
@@ -141,11 +131,6 @@
             this.numericUpDown3.Name = "numericUpDown3";
             this.numericUpDown3.Size = new System.Drawing.Size(50, 20);
             this.numericUpDown3.TabIndex = 16;
-            this.numericUpDown3.Value = new decimal(new int[] {
-            255,
-            0,
-            0,
-            0});
             // 
             // numericUpDown4
             // 
@@ -158,11 +143,6 @@
             this.numericUpDown4.Name = "numericUpDown4";
             this.numericUpDown4.Size = new System.Drawing.Size(50, 20);
             this.numericUpDown4.TabIndex = 17;
-            this.numericUpDown4.Value = new decimal(new int[] {
-            255,
-            0,
-            0,
-            0});
             // 
             // label2
             // 

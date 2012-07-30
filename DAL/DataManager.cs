@@ -342,6 +342,10 @@ namespace OpenHardwareMonitor.DAL
             max = 0.0;
             avg = 0.0;
             stddev = 0.0;
+
+            if (AggregatedData == null)
+                return false;
+
             lock (s_lockObject)
             {
 

@@ -225,7 +225,7 @@ namespace OpenHardwareMonitor.GUI {
         unitManager.TemperatureUnit == TemperatureUnit.Celsius;
       fahrenheitMenuItem.Checked = !celsiusMenuItem.Checked;
 
-      HttpClient.ServerURL = this.settings.GetValue("dataServerAddress", "http://192.168.1.2:8080/aggregator");
+      HttpClient.ServerURL = this.settings.GetValue("dataServerAddress", "");
 
       server = new HttpServer(root, this.settings.GetValue("listenerPort", 8085));
       runWebServer = new UserOption("runWebServerMenuItem", false,
