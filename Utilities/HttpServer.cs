@@ -214,7 +214,12 @@ namespace OpenHardwareMonitor.Utilities
                     return;
                 }
 
-                if (requestedFile.Contains("aggregator"))
+                if (requestedFile == "aggregatedData")
+                {
+                    SendAggregateData(context);
+                    return;
+                }
+                if (requestedFile == "aggregator")
                 {
                     SaveAggregateData(context);
                     return;
@@ -269,6 +274,35 @@ namespace OpenHardwareMonitor.Utilities
             }
         }
 
+        private void SendAggregateData(HttpListenerContext context)
+        {
+            var request = context.Request;
+            string json;
+            using (var reader = new StreamReader(request.InputStream,
+                                                 request.ContentEncoding))
+            {
+                json = reader.ReadToEnd();
+            }
+
+
+            List<DataManager.ComponentSensorTypesContainer> list = JsonConvert.DeserializeObject<List<DataManager.ComponentSensorTypesContainer>>(json);
+
+            foreach (var item in list)
+            {
+                DataManager.GetData(item.Name, item.ComponentType, item.SensorName, out item.Avg, out item.Min, out item.Max, out item.StdDev);
+            }
+            json = JsonConvert.SerializeObject(list, Formatting.Indented);
+
+            var responseContent = json;
+            byte[] buffer = Encoding.UTF8.GetBytes(responseContent);
+
+            context.Response.ContentLength64 = buffer.Length;
+            context.Response.ContentType = "application/json";
+
+            Stream outputStream = context.Response.OutputStream;
+            outputStream.Write(buffer, 0, buffer.Length);
+            outputStream.Close();
+        }
         private void SaveAggregateData(HttpListenerContext context)
         {
             var request = context.Request;
@@ -575,8 +609,13 @@ namespace OpenHardwareMonitor.Utilities
                 double stddev;
                 List<DataManagerData> values = DataManager.GetDataForSensor(componentSensorId, start, end - start, DataManager.DateRangeType.day, DataManager.DateRangeType.second, out avg, out min, out max, out stddev);
 
-                var epoch = new DateTime (1970, 1, 1);
-                string JSON = "{\"id\": \"" + sensorId + "\", \"data\": [";
+                var aggStatus = DataManager.GetAggregateData(componentSensorId, out min, out max, out avg, out stddev);
+
+                string JSON;
+                if (aggStatus)
+                    JSON = "{\"id\": \"" + sensorId + "\", \"min\": " + Math.Round(min, 2) + ", \"max\": " + Math.Round(max, 2) + ", \"avg\": " + Math.Round(avg, 2) + ", \"stddev\": " + Math.Round(stddev, 2) + ", \"data\": [";
+                else
+                    JSON = "{\"id\": \"" + sensorId + "\", \"data\": [";
                 foreach (DataManagerData data in values)
                 {
                     JSON += "[\"" + data.TimeStamp.ToString("yyyy/MM/dd HH:mm:ss") + " GMT\", " + data.Measure + "],";

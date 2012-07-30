@@ -53,7 +53,7 @@
             0,
             0});
             this.serverPortNumericUpDn.Minimum = new decimal(new int[] {
-            8080,
+            8085,
             0,
             0,
             0});
@@ -61,7 +61,7 @@
             this.serverPortNumericUpDn.Size = new System.Drawing.Size(75, 20);
             this.serverPortNumericUpDn.TabIndex = 9;
             this.serverPortNumericUpDn.Value = new decimal(new int[] {
-            8080,
+            8085,
             0,
             0,
             0});

@@ -19,7 +19,9 @@ namespace OpenHardwareMonitor.GUI
 
         private void ServerAddressForm_Load(object sender, EventArgs e)
         {
-            var IP = HttpClient.ServerURL.Replace("http://", "").Replace("/aggregator", "");
+            if (HttpClient.ServerURL == null || HttpClient.ServerURL == "")
+                return;
+            var IP = HttpClient.ServerURL.Replace("http://", "").Replace("/aggregator", "").Replace("/", "");
             var port = IP.Split(':')[1];
             var subIPs = IP.Split(':')[0].Split('.');
 
@@ -43,7 +45,7 @@ namespace OpenHardwareMonitor.GUI
 
         private void serverAddressOKButton_Click(object sender, EventArgs e)
         {
-            HttpClient.ServerURL = "http://" + this.numericUpDown1.Value + "." + this.numericUpDown2.Value + "." + this.numericUpDown3.Value + "." + this.numericUpDown4.Value + ":" + (int)this.serverPortNumericUpDn.Value + "/aggregator";
+            HttpClient.ServerURL = "http://" + this.numericUpDown1.Value + "." + this.numericUpDown2.Value + "." + this.numericUpDown3.Value + "." + this.numericUpDown4.Value + ":" + (int)this.serverPortNumericUpDn.Value + "/";
             this.Close();
         }
     }
