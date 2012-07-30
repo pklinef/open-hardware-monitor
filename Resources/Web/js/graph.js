@@ -1,6 +1,7 @@
 $(window).load(function () {
     var graph;
     var refreshTimer;
+    var curModel;
     var currentPeer = window.location.host;
 
     //keeping track of the two datefields
@@ -115,7 +116,7 @@ $(window).load(function () {
                     document.getElementById("sensor"),
                     this.get("data"),
                     {
-                        title: this.get("text") + " (Aggregate Data:  Min = " + this.get("min") + ", Avg = " + this.get("avg") + ", Max = " + this.get("max") + ")",
+                        title: this.get("text"), 
                         xlabel: "Date",
                         ylabel: this.get("type"),
                         labels: ["Date", this.get("text")],
@@ -128,7 +129,7 @@ $(window).load(function () {
             }
             else {
                 graph.updateOptions({ 'file': this.get("data"),
-                    'title': this.get("text") + " (Aggregate Data:  Min = " + this.get("min") + ", Avg = " + this.get("avg") + ", Max = " + this.get("max") + ")",
+                    'title': this.get("text"), 
                     'labels': ["Date", this.get("text")],
                     'ylabel': this.get("type")
                 });
@@ -152,6 +153,7 @@ $(window).load(function () {
             return this;
         },
         plot: function () {
+            curModel = this.model;
             this.model.set({ "data": null }, { silent: true });
             statusEl.text("Fetching graph data ...");
             if (currentPeer != window.location.host) {
@@ -195,7 +197,6 @@ $(window).load(function () {
     var refreshChart = function () {
         if (graph == null)
             return;
-        var curModel = coll.get($('input:radio[name=sensor_radios]:checked').val());
         if (undefined != curModel) {
             curModel.set({ "data": null }, { silent: true });
             statusEl.text("Fetching graph data ...");
@@ -307,5 +308,15 @@ $(window).load(function () {
     });
     endDateEl.focus(function () {
         endDateEl.unbind('focus').AnyTime_picker({ format: rangeFormat, placement: "popup" }); ;
+    });
+
+    $('#aggregatePopup').popover({ content: function () {
+        if (curModel && curModel.get("componentType"))
+            return "Component Type: " + curModel.get("componentType") + ", Sensor Type: " + curModel.get("sensorType") + 
+            ", Min = " + curModel.get("min") + ", Avg = " + curModel.get("avg") + ", Max = " + curModel.get("max");
+        else
+            return "No data available."
+        } 
+            
     });
 });

@@ -73,7 +73,7 @@
             <div style="width: auto;" class="container-fluid">
                 <div class="row-fluid">
                     <div class="span4">
-                        <a href="#" class="brand">Team Drop Table</a>
+                        <a href="https://wiki.engr.illinois.edu/display/cs411su12/Team+Drop+Table" class="brand">Team Drop Table</a>
                         <ul class="nav">
                             <li class="dropdown" id="peers_menu"><a class="dropdown-toggle" data-toggle="dropdown"
                                 href="#menu1">Peer Computers <b class="caret"></b></a></li>
@@ -94,7 +94,7 @@
                                 Custom</button>
                         </div>
                         <input class="btn btn-inverse" id="refresh" type="button" value="Refresh Graph" />
-                        <button class="btn btn-inverse" id="autoRefresh" data-toggle="button">Auto Refresh</button>
+                        <button class="btn btn-inverse" id="autoRefresh" data-toggle="button">Auto Refresh (5s)</button>
                         <div class="pull-right">
                             <div>
                                 Last Visit: <span id="lastAccessTime" />
@@ -117,6 +117,8 @@
                 </div>
             </div>
             <div id="sidebar" class="span3">
+                <a id="aggregatePopup" data-placement="bottom" rel="popover" class="btn btn-info" href="#" data-original-title="Aggregated Data">Hover for Aggregated Data</a>
+                <br />
                 <script id="tpl-node" type="text/template">
                         <tr id="node-<%= nid %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>
                             <td><% 

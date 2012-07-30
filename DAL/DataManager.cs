@@ -336,12 +336,14 @@ namespace OpenHardwareMonitor.DAL
             return false;
         }
 
-        public static bool GetAggregateData(long componentSensorId, out double min, out double max, out double avg, out double stddev)
+        public static bool GetAggregateData(long componentSensorId, out double min, out double max, out double avg, out double stddev, out string componentType, out SensorType sensorName)
         {
             min = 0.0;
             max = 0.0;
             avg = 0.0;
             stddev = 0.0;
+            componentType = null;
+            sensorName = 0;
 
             if (AggregatedData == null)
                 return false;
@@ -377,7 +379,8 @@ namespace OpenHardwareMonitor.DAL
                         max = item.Max;
                         avg = item.Avg;
                         stddev = item.StdDev;
-
+                        componentType = cstc.ComponentType;
+                        sensorName = cstc.SensorName;
                         return true;
                     }
                 }

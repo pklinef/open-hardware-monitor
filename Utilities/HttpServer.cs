@@ -648,11 +648,13 @@ namespace OpenHardwareMonitor.Utilities
                 double stddev;
                 List<DataManagerData> values = DataManager.GetDataForSensor(componentSensorId, start, end - start, DataManager.DateRangeType.day, DataManager.DateRangeType.second, out avg, out min, out max, out stddev);
 
-                var aggStatus = DataManager.GetAggregateData(componentSensorId, out min, out max, out avg, out stddev);
+                string componentType = null;
+                SensorType sensorName = 0;
+                var aggStatus = DataManager.GetAggregateData(componentSensorId, out min, out max, out avg, out stddev, out componentType, out sensorName);
 
                 string JSON;
                 if (aggStatus)
-                    JSON = "{\"id\": \"" + sensorId + "\", \"min\": " + Math.Round(min, 2) + ", \"max\": " + Math.Round(max, 2) + ", \"avg\": " + Math.Round(avg, 2) + ", \"stddev\": " + Math.Round(stddev, 2) + ", \"data\": [";
+                    JSON = "{\"id\": \"" + sensorId  + "\", \"componentType\": \"" + componentType + "\", \"sensorType\": \"" + sensorName + "\", \"min\": " + Math.Round(min, 2) + ", \"max\": " + Math.Round(max, 2) + ", \"avg\": " + Math.Round(avg, 2) + ", \"stddev\": " + Math.Round(stddev, 2) + ", \"data\": [";
                 else
                     JSON = "{\"id\": \"" + sensorId + "\", \"data\": [";
                 foreach (DataManagerData data in values)
