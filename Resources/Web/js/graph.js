@@ -91,6 +91,10 @@ $(window).load(function () {
             parent: '',
             type: '',
             imageURL: '',
+            min: 0.0,
+            max: 0.0,
+            avg: 0.0,
+            stddev: 0.0,
             data: ''
         },
         initialize: function () {
@@ -104,13 +108,14 @@ $(window).load(function () {
             this.updateChart();
             statusEl.text("Graph updated");
         },
+
         updateChart: function () {
             if (graph == null) {
                 graph = new Dygraph(
                     document.getElementById("sensor"),
                     this.get("data"),
                     {
-                        title: this.get("text"),
+                        title: this.get("text") + " (Aggregate Data:  Min = " + this.get("min") + ", Avg = " + this.get("avg") + ", Max = " + this.get("max") + ")",
                         xlabel: "Date",
                         ylabel: this.get("type"),
                         labels: ["Date", this.get("text")],
@@ -123,7 +128,7 @@ $(window).load(function () {
             }
             else {
                 graph.updateOptions({ 'file': this.get("data"),
-                    'title': this.get("text"),
+                    'title': this.get("text") + " (Aggregate Data:  Min = " + this.get("min") + ", Avg = " + this.get("avg") + ", Max = " + this.get("max") + ")",
                     'labels': ["Date", this.get("text")],
                     'ylabel': this.get("type")
                 });
