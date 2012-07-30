@@ -1,6 +1,7 @@
 $(window).load(function () {
     var graph;
     var refreshTimer;
+    var currentPeer = window.location.host;
 
     //keeping track of the two datefields
     //so that we don't traverse the DOM tree every time
@@ -22,10 +23,24 @@ $(window).load(function () {
 
     var PeerView = Backbone.View.extend({
         template: _.template($('#tpl-peer').html()),
+        events: {
+            'click': 'peerSelect'
+        },
         render: function (eventName) {
             var html = this.template(this.model.toJSON());
             this.setElement($(html));
             return this;
+        },
+        peerSelect: function (e) {
+            e.preventDefault();
+            currentPeer = this.model.toJSON().address;
+            if (currentPeer != window.location.host) {
+                coll.reset();
+                coll.fetch({ data: { peer: currentPeer} });
+            } else {
+                coll.reset();
+                coll.fetch();
+            }
         }
     });
 
@@ -59,7 +74,7 @@ $(window).load(function () {
 
             // Add local machine
             if (coll && coll.models.length > 0) {
-                var peerview = new PeerView({ model: new Peer({ name: coll.models[0].toJSON().text, address: window.location.host }) });
+                var peerview = new PeerView({ model: new Peer({ name: "Local Machine", address: window.location.host }) });
                 this.$el.append(peerview.render().$el);
             }
 
@@ -89,7 +104,6 @@ $(window).load(function () {
             this.updateChart();
             statusEl.text("Graph updated");
         },
-
         updateChart: function () {
             if (graph == null) {
                 graph = new Dygraph(
@@ -128,7 +142,6 @@ $(window).load(function () {
             "change input[type=radio]": "plot"
         },
         render: function (eventName) {
-
             var html = this.template(this.model.toJSON());
             this.setElement($(html));
             return this;
@@ -136,7 +149,11 @@ $(window).load(function () {
         plot: function () {
             this.model.set({ "data": null }, { silent: true });
             statusEl.text("Fetching graph data ...");
-            this.model.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
+            if (currentPeer != window.location.host) {
+                this.model.fetch({ data: { start: startDateEl.val(), end: endDateEl.val(), peer: currentPeer} });
+            } else {
+                this.model.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
+            }
             return;
         }
     });
@@ -148,11 +165,10 @@ $(window).load(function () {
             this.collection.bind("reset", this.render, this);
         },
         render: function (eventName) {
-            this.$el.html();
+            this.$el.html('');
 
-            if (this.collection.length > 0) {
-                var computerName = this.collection.models[0].toJSON().text;
-                var peerview = new PeerView({ model: new Peer({ name: computerName, address: window.location.host }) });
+            if ($("#peers_menu ul.dropdown-menu :contains('Local Machine')").size() == 0) {
+                var peerview = new PeerView({ model: new Peer({ name: "Local Machine", address: window.location.host }) });
                 $("#peers_menu ul.dropdown-menu").append(peerview.render().$el);
             }
 
@@ -175,9 +191,15 @@ $(window).load(function () {
         if (graph == null)
             return;
         var curModel = coll.get($('input:radio[name=sensor_radios]:checked').val());
-        curModel.set({ "data": null }, { silent: true });
-        statusEl.text("Fetching graph data ...");
-        curModel.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
+        if (undefined != curModel) {
+            curModel.set({ "data": null }, { silent: true });
+            statusEl.text("Fetching graph data ...");
+            if (currentPeer != window.location.host) {
+                curModel.fetch({ data: { start: startDateEl.val(), end: endDateEl.val(), peer: currentPeer} });
+            } else {
+                curModel.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
+            }
+        }
     };
 
     var setTenMinRange = function (e) {

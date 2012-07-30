@@ -25,6 +25,7 @@ using System.Globalization;
 using Lidgren.Network;
 using System.Diagnostics;
 using System.Timers;
+using System.Collections.Specialized;
 
 namespace OpenHardwareMonitor.Utilities
 {
@@ -55,7 +56,7 @@ namespace OpenHardwareMonitor.Utilities
 
             peerTimer = new System.Timers.Timer();
             peerTimer.Elapsed += new ElapsedEventHandler(TimerElapsed);
-            peerTimer.Interval = 1000 * 60 * 5;
+            peerTimer.Interval = 1000 * 60 * 1;
         }
 
         public Boolean startHTTPListener()
@@ -175,9 +176,12 @@ namespace OpenHardwareMonitor.Utilities
 
                         if (!connectedToPeer)
                         {
-                            Console.WriteLine("DiscoveryResponse from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port +
-                                " machine name: " + machineName);
-                            peers.Add(msg.SenderEndpoint, machineName);
+                            if (!peers.ContainsKey(msg.SenderEndpoint))
+                            {
+                                Console.WriteLine("DiscoveryResponse from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port +
+                                    " machine name: " + machineName);
+                                peers.Add(msg.SenderEndpoint, machineName);
+                            }
 
                             NetOutgoingMessage hailMessage = p.CreateMessage();
                             hailMessage.Write(Environment.MachineName);
@@ -292,6 +296,12 @@ namespace OpenHardwareMonitor.Utilities
             try
             {
                 WebClient client = new WebClient();
+                NameValueCollection proxyQueryString = context.Request.QueryString;
+                proxyQueryString.Remove("peer");
+                if (proxyQueryString.Count > 0)
+                {
+                    client.QueryString = proxyQueryString;
+                }
                 byte[] data = client.DownloadData(address);
 
                 Stream outputStream = context.Response.OutputStream;
