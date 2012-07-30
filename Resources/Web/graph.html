@@ -112,13 +112,14 @@
         <div class="row-fluid">
             <div id="graph" class="span9">
                 <div class="row-fluid">
-                    <div id="sensor">
+                    <a id="aggregatePopup" data-placement="bottom" rel="popover" class="btn btn-info"
+                        href="#" data-original-title="Aggregated Data">Hover for Aggregated Data</a>
+                        <span class="label pull-right">Click and drag to zoom. Double click to reset zoom.</span>
+                    <div id="sensor" class="well">
                     </div>
                 </div>
             </div>
             <div id="sidebar" class="span3">
-                <a id="aggregatePopup" data-placement="bottom" rel="popover" class="btn btn-info" href="#" data-original-title="Aggregated Data">Hover for Aggregated Data</a>
-                <br />
                 <script id="tpl-node" type="text/template">
                         <tr id="node-<%= nid %>" <% if (parent) { %> class="child-of-node-<%= parent %>" <% } %>>
                             <td><% 

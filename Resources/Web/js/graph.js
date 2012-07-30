@@ -121,7 +121,8 @@ $(window).load(function () {
                         ylabel: this.get("type"),
                         labels: ["Date", this.get("text")],
                         labelsDivStyles: { 'textAlign': 'right' },
-                        showRangeSelector: true,
+                        showRangeSelector: true, 
+                        interactionModel: Dygraph.defaultInteractionModel,
                         colors: ['#0074CC'],
                         strokeWidth: 1
                     }
