@@ -35,6 +35,7 @@ namespace OpenHardwareMonitor.DAL
         private static DateTime s_lastHourAggregation = DateTime.MinValue;
         private static DateTime s_lastDayAggregation = DateTime.MinValue;
 
+        public static List<ComponentSensorTypesContainer> AggregatedData { get; set; }
         private static HttpClient s_httpClient = new HttpClient();
 
         private DataManager()
@@ -316,8 +317,8 @@ namespace OpenHardwareMonitor.DAL
                         double tempMin = Math.Min(min, Convert.ToDouble(reader["Min"]));
                         min = Math.Min(min, tempMin);
 
-                        double tempMax = Math.Min(min, Convert.ToDouble(reader["Max"]));
-                        min = Math.Max(max, tempMax);
+                        double tempMax = Math.Max(max, Convert.ToDouble(reader["Max"]));
+                        max = Math.Max(max, tempMax);
                         
                         count += Convert.ToInt64(reader["Count"]);
                         sum += Convert.ToDouble(reader["Sum"]);
@@ -333,6 +334,78 @@ namespace OpenHardwareMonitor.DAL
                 }
             }
             return false;
+        }
+
+        public static bool GetAggregateData(long componentSensorId, out double min, out double max, out double avg, out double stddev)
+        {
+            min = 0.0;
+            max = 0.0;
+            avg = 0.0;
+            stddev = 0.0;
+            lock (s_lockObject)
+            {
+
+                const string c_query = "SELECT DISTINCT cp.Type, st.Name FROM ((Component cp JOIN ComputerComponent cc ON cp.ComponentID = cc.ComponentID) JOIN ComponentSensor cs ON cc.ComputerComponentID = cs.ComputerComponentID) JOIN SensorType st ON cs.SensorTypeID = st.SensorTypeID where ComponentSensorID=@componentSensorId;";
+
+                SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection);
+                sqlQueryCommand.CommandText = c_query;
+                sqlQueryCommand.Parameters.Add(new SQLiteParameter("@componentSensorId", componentSensorId));
+
+                ComponentSensorTypesContainer cstc = new ComponentSensorTypesContainer();
+                List<ComponentSensorTypesContainer> list = new List<ComponentSensorTypesContainer>();
+                using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        cstc.ComponentType = (string)reader["Type"];
+                        cstc.SensorName = (SensorType)Enum.Parse(typeof(SensorType), (string)reader["Name"]);
+                    }
+                }
+
+                if (cstc.ComponentType == null || cstc.ComponentType == "")
+                    return false;
+
+                foreach (var item in AggregatedData)
+                {
+                    if (item.ComponentType == cstc.ComponentType && item.SensorName == cstc.SensorName)
+                    {
+                        min = item.Min;
+                        max = item.Max;
+                        avg = item.Avg;
+                        stddev = item.StdDev;
+
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static List<ComponentSensorTypesContainer> GetComponentSensorList()
+        {
+            List<ComponentSensorTypesContainer> list = new List<ComponentSensorTypesContainer>();
+            lock (s_lockObject)
+            {
+
+                const string c_query = "SELECT DISTINCT cp.Type, st.Name FROM ((Component cp JOIN ComputerComponent cc ON cp.ComponentID = cc.ComponentID) JOIN ComponentSensor cs ON cc.ComputerComponentID = cs.ComputerComponentID) JOIN SensorType st ON cs.SensorTypeID = st.SensorTypeID;";
+
+                SQLiteCommand sqlQueryCommand = new SQLiteCommand(s_dataManager._sqliteConnection);
+                sqlQueryCommand.CommandText = c_query;
+
+                using (SQLiteDataReader reader = sqlQueryCommand.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        list.Add(new ComponentSensorTypesContainer
+                        {
+                            ComponentType = (string)reader["Type"],
+                            SensorName = (SensorType) Enum.Parse(typeof(SensorType), (string)reader["Name"]) 
+                        });
+                    }
+                }
+            }
+            return list;
         }
 
         public static List<DataManagerData> GetDataForSensor(long componentSensorId, DateTime startTime, TimeSpan timeRange, DateRangeType minResolution, DateRangeType maxResolution, out double average, out double min, out double max, out double stddev)
@@ -1373,6 +1446,17 @@ namespace OpenHardwareMonitor.DAL
             day = 10,
         }
 
+        public class ComponentSensorTypesContainer
+        {
+            public string Name;
+            public string ComponentType;
+            public SensorType SensorName;
+            public double Max = 0;
+            public double Min = 0;
+            public double Avg = 0;
+            public double StdDev = 0;
+        }
+
         public class AggregateContainer
         {
             public string Name;
@@ -1667,9 +1751,12 @@ namespace OpenHardwareMonitor.DAL
                         // Atomically replace
                         Thresholds = thresholds;
 
-                        bool sendToServerSuccess = false; // s_httpClient.SendToServer(dataToSendToServer);
+                        bool sendToServerSuccess = s_httpClient.SendToServer(dataToSendToServer);
+
                         if (sendToServerSuccess)
                         {
+                            List<DataManager.ComponentSensorTypesContainer> componentSensorList = GetComponentSensorList();
+                            AggregatedData = s_httpClient.GetAggregatedStats(componentSensorList);
                             if (lastWatermark > DateTime.MinValue)
                             {
                                 const string c_insertNewWatermark = "UPDATE Watermarks SET Date = @date WHERE WatermarkId = @watermarkId";
@@ -1707,10 +1794,13 @@ namespace OpenHardwareMonitor.DAL
                         }
 
                         s_lastDayAggregation = dayFloorTime;
+
+
                     }
                 }
             }
         }
+
 
         private class SensorReading
         {
@@ -1771,5 +1861,6 @@ namespace OpenHardwareMonitor.DAL
         }
 
         #endregion
+
     }
 }
