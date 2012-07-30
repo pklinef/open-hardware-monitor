@@ -24,7 +24,7 @@ using System.Drawing.Imaging;
 using System.Globalization;
 using Lidgren.Network;
 using System.Diagnostics;
-using Newtonsoft.Json;
+using System.Timers;
 
 namespace OpenHardwareMonitor.Utilities
 {
@@ -34,7 +34,8 @@ namespace OpenHardwareMonitor.Utilities
         private int listenerHttpPort, nodeCount;
         private Thread listenerThread;
         private Node root;
-        private NetPeer peer;
+        private static NetPeer peer;
+        private static System.Timers.Timer peerTimer;
         private static Hashtable peers = new Hashtable();
 
         public HttpServer(Node r, int p)
@@ -51,6 +52,10 @@ namespace OpenHardwareMonitor.Utilities
             config.EnableMessageType(NetIncomingMessageType.DiscoveryRequest);
             peer = new NetPeer(config);
             peer.RegisterReceivedCallback(new SendOrPostCallback(HandlePeerMessages));
+
+            peerTimer = new System.Timers.Timer();
+            peerTimer.Elapsed += new ElapsedEventHandler(TimerElapsed);
+            peerTimer.Interval = 1000 * 60 * 5;
         }
 
         public Boolean startHTTPListener()
@@ -79,6 +84,7 @@ namespace OpenHardwareMonitor.Utilities
 
             peer.Start();
             peer.DiscoverLocalPeers(peer.Port);
+            peerTimer.Enabled = true;
 
             return true;
         }
@@ -129,6 +135,7 @@ namespace OpenHardwareMonitor.Utilities
             {
             }
 
+            peerTimer.Enabled = false;
             peer.Shutdown("bye");
 
             return true;
@@ -144,33 +151,48 @@ namespace OpenHardwareMonitor.Utilities
                 switch (msg.MessageType)
                 {
                     case NetIncomingMessageType.DiscoveryRequest:
-                        Console.WriteLine("DiscoveryRequest from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port);
+                        if (!peers.ContainsKey(msg.SenderEndpoint))
+                        {
+                            Console.WriteLine("DiscoveryRequest from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port);
 
-                        NetOutgoingMessage requestResponse = p.CreateMessage();
-                        requestResponse.Write(Environment.MachineName);
+                            NetOutgoingMessage requestResponse = p.CreateMessage();
+                            requestResponse.Write(Environment.MachineName);
 
-                        p.SendDiscoveryResponse(requestResponse, msg.SenderEndpoint);
+                            p.SendDiscoveryResponse(requestResponse, msg.SenderEndpoint);
+                        }
                         break;
                     case NetIncomingMessageType.DiscoveryResponse:
                         machineName = msg.ReadString();
-                        peers.Add(msg.SenderEndpoint, machineName);
-                        Console.WriteLine("DiscoveryResponse from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port +
-                            " machine name: " + machineName);
 
-                        NetOutgoingMessage hailMessage = p.CreateMessage();
-                        hailMessage.Write(Environment.MachineName);
-                        NetConnection senderConn = p.Connect(msg.SenderEndpoint, hailMessage);
+                        Boolean connectedToPeer = false;
+                        foreach (NetConnection conn in p.Connections)
+                        {
+                            if (conn.RemoteEndpoint == msg.SenderEndpoint)
+                            {
+                                connectedToPeer = true;
+                            }
+                        }
 
-                        break;
-                    case NetIncomingMessageType.Data:
-                        machineName = msg.ReadString();
-                        peers.Add(msg.SenderEndpoint, machineName);
-                        Console.WriteLine("DiscoveryResponse from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port +
-                            " machine name: " + machineName);
+                        if (!connectedToPeer)
+                        {
+                            Console.WriteLine("DiscoveryResponse from " + msg.SenderEndpoint.Address + " port: " + msg.SenderEndpoint.Port +
+                                " machine name: " + machineName);
+                            peers.Add(msg.SenderEndpoint, machineName);
+
+                            NetOutgoingMessage hailMessage = p.CreateMessage();
+                            hailMessage.Write(Environment.MachineName);
+                            NetConnection senderConn = p.Connect(msg.SenderEndpoint, hailMessage);
+                        }
+
                         break;
                 }
                 p.Recycle(msg);
             }
+        }
+
+        static void TimerElapsed(object sender, ElapsedEventArgs e)
+        {
+            peer.DiscoverLocalPeers(peer.Port);
         }
 
         public void HandleRequests()
@@ -211,12 +233,6 @@ namespace OpenHardwareMonitor.Utilities
                 if (requestedFile == "data.json")
                 {
                     sendJSON(context);
-                    return;
-                }
-
-                if (requestedFile.Contains("aggregator"))
-                {
-                    SaveAggregateData(context);
                     return;
                 }
 
@@ -267,32 +283,6 @@ namespace OpenHardwareMonitor.Utilities
             {
                 Console.WriteLine(ex.ToString());
             }
-        }
-
-        private void SaveAggregateData(HttpListenerContext context)
-        {
-            var request = context.Request;
-            string json;
-            using (var reader = new StreamReader(request.InputStream,
-                                                 request.ContentEncoding))
-            {
-                json = reader.ReadToEnd();
-            }
-
-
-            HttpListenerResponse response = context.Response;
-            string responseString = "OK";
-
-            List<DataManager.AggregateContainer> data = JsonConvert.DeserializeObject<List<DataManager.AggregateContainer>>(json);
-            if (!DataManager.InsertData(data))
-                responseString = "Error";
-
-            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-            response.ContentLength64 = buffer.Length;
-            System.IO.Stream output = response.OutputStream;
-            output.Write(buffer, 0, buffer.Length);
-            output.Close();
-
         }
 
         private void proxyRequest(HttpListenerContext context, String peer)
