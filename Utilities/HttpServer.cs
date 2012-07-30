@@ -95,13 +95,19 @@ namespace OpenHardwareMonitor.Utilities
             // HACK to add port exception to Windows Firewall since HTTPListener uses HTTP.sys
             // for Windows Vista and up only
 
-            // remove current OpenHardwareMonitor port in case it has changed
-            string deleteRuleArgs = @"advfirewall firewall delete rule name=OpenHardwareMonitor";
-            RunNetsh(deleteRuleArgs);
+            OperatingSystem os = Environment.OSVersion;
+            Version vs = os.Version;
 
-            // add current OpenHardwareMonitor port
-            string createRuleArgs = string.Format(@"advfirewall firewall add rule name=OpenHardwareMonitor dir=in action=allow protocol=TCP localport={0}", port);
-            RunNetsh(createRuleArgs);
+            if (os.Platform == PlatformID.Win32NT && vs.Major >= 6)
+            {
+                // remove current OpenHardwareMonitor port in case it has changed
+                string deleteRuleArgs = @"advfirewall firewall delete rule name=OpenHardwareMonitor";
+                RunNetsh(deleteRuleArgs);
+
+                // add current OpenHardwareMonitor port
+                string createRuleArgs = string.Format(@"advfirewall firewall add rule name=OpenHardwareMonitor dir=in action=allow protocol=TCP localport={0}", port);
+                RunNetsh(createRuleArgs);
+            }
         }
 
         public static void RunNetsh(string args)
