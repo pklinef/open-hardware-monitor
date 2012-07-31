@@ -40,6 +40,8 @@ $(window).load(function () {
         peerSelect: function (e) {
             e.preventDefault();
             currentPeer = this.model.toJSON().address;
+            graph.destroy();
+            graph = null;
             if (currentPeer != window.location.host) {
                 coll.reset();
                 coll.fetch({ data: { peer: currentPeer} });
@@ -121,12 +123,12 @@ $(window).load(function () {
                     document.getElementById("sensor"),
                     this.get("data"),
                     {
-                        title: this.get("text"), 
+                        title: this.get("text"),
                         xlabel: "Date",
                         ylabel: this.get("type"),
                         labels: ["Date", this.get("text")],
                         labelsDivStyles: { 'textAlign': 'right' },
-                        showRangeSelector: true, 
+                        showRangeSelector: true,
                         interactionModel: Dygraph.defaultInteractionModel,
                         colors: ['#0074CC'],
                         strokeWidth: 1
@@ -135,7 +137,7 @@ $(window).load(function () {
             }
             else {
                 graph.updateOptions({ 'file': this.get("data"),
-                    'title': this.get("text"), 
+                    'title': this.get("text"),
                     'labels': ["Date", this.get("text")],
                     'ylabel': this.get("type")
                 });
@@ -165,7 +167,7 @@ $(window).load(function () {
             if (currentPeer != window.location.host) {
                 this.model.fetch({ data: { start: utcConv.format(rangeConv.parse(startDateEl.val())), end: utcConv.format(rangeConv.parse(endDateEl.val())), peer: currentPeer} });
             } else {
-                this.model.fetch({ data: {start: utcConv.format(rangeConv.parse(startDateEl.val())), end: utcConv.format(rangeConv.parse(endDateEl.val()))} });
+                this.model.fetch({ data: { start: utcConv.format(rangeConv.parse(startDateEl.val())), end: utcConv.format(rangeConv.parse(endDateEl.val()))} });
             }
             return;
         }
@@ -209,7 +211,7 @@ $(window).load(function () {
             if (currentPeer != window.location.host) {
                 curModel.fetch({ data: { start: utcConv.format(rangeConv.parse(startDateEl.val())), end: utcConv.format(rangeConv.parse(endDateEl.val())), peer: currentPeer} });
             } else {
-                curModel.fetch({ data: {start: utcConv.format(rangeConv.parse(startDateEl.val())), end: utcConv.format(rangeConv.parse(endDateEl.val()))} });
+                curModel.fetch({ data: { start: utcConv.format(rangeConv.parse(startDateEl.val())), end: utcConv.format(rangeConv.parse(endDateEl.val()))} });
             }
         }
     };
@@ -315,11 +317,11 @@ $(window).load(function () {
 
     $('#aggregatePopup').popover({ content: function () {
         if (curModel && curModel.get("componentType"))
-            return "Component Type: " + curModel.get("componentType") + ", Sensor Type: " + curModel.get("sensorType") + 
+            return "Component Type: " + curModel.get("componentType") + ", Sensor Type: " + curModel.get("sensorType") +
             ", Min = " + curModel.get("min") + ", Avg = " + curModel.get("avg") + ", Max = " + curModel.get("max");
         else
             return "No data available."
-        } 
-            
+    }
+
     });
 });
