@@ -82,6 +82,7 @@ namespace OpenHardwareMonitor.GUI {
             this.webMenuItem = new System.Windows.Forms.MenuItem();
             this.runWebServerMenuItem = new System.Windows.Forms.MenuItem();
             this.serverPortMenuItem = new System.Windows.Forms.MenuItem();
+            this.dataServerMenuItem = new System.Windows.Forms.MenuItem();
             this.helpMenuItem = new System.Windows.Forms.MenuItem();
             this.aboutMenuItem = new System.Windows.Forms.MenuItem();
             this.treeContextMenu = new System.Windows.Forms.ContextMenu();
@@ -89,7 +90,7 @@ namespace OpenHardwareMonitor.GUI {
             this.timer = new System.Windows.Forms.Timer(this.components);
             this.splitContainer = new OpenHardwareMonitor.GUI.SplitContainerAdv();
             this.treeView = new Aga.Controls.Tree.TreeViewAdv();
-            this.dataServerMenuItem = new System.Windows.Forms.MenuItem();
+            this.emailAlertMenuItem = new System.Windows.Forms.MenuItem();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer)).BeginInit();
             this.splitContainer.Panel1.SuspendLayout();
             this.splitContainer.SuspendLayout();
@@ -310,7 +311,8 @@ namespace OpenHardwareMonitor.GUI {
             this.MenuItem4,
             this.hddMenuItem,
             this.webMenuItem,
-            this.dataServerMenuItem});
+            this.dataServerMenuItem,
+            this.emailAlertMenuItem});
             this.optionsMenuItem.Text = "Options";
             // 
             // startMinMenuItem
@@ -411,6 +413,12 @@ namespace OpenHardwareMonitor.GUI {
             this.serverPortMenuItem.Text = "Port";
             this.serverPortMenuItem.Click += new System.EventHandler(this.serverPortMenuItem_Click);
             // 
+            // dataServerMenuItem
+            // 
+            this.dataServerMenuItem.Index = 10;
+            this.dataServerMenuItem.Text = "Data Server";
+            this.dataServerMenuItem.Click += new System.EventHandler(this.dataServerMenuItem_Click);
+            // 
             // helpMenuItem
             // 
             this.helpMenuItem.Index = 3;
@@ -492,11 +500,11 @@ namespace OpenHardwareMonitor.GUI {
             this.treeView.MouseMove += new System.Windows.Forms.MouseEventHandler(this.treeView_MouseMove);
             this.treeView.MouseUp += new System.Windows.Forms.MouseEventHandler(this.treeView_MouseUp);
             // 
-            // dataServerMenuItem
+            // emailAlertMenuItem
             // 
-            this.dataServerMenuItem.Index = 10;
-            this.dataServerMenuItem.Text = "Data Server Address";
-            this.dataServerMenuItem.Click += new System.EventHandler(this.dataServerMenuItem_Click);
+            this.emailAlertMenuItem.Index = 11;
+            this.emailAlertMenuItem.Text = "Email Alerts";
+            this.emailAlertMenuItem.Click += new System.EventHandler(this.emailAlertMenuItem_Click);
             // 
             // MainForm
             // 
@@ -577,6 +585,7 @@ namespace OpenHardwareMonitor.GUI {
     private System.Windows.Forms.MenuItem runWebServerMenuItem;
     private System.Windows.Forms.MenuItem serverPortMenuItem;
     private System.Windows.Forms.MenuItem dataServerMenuItem;
+    private System.Windows.Forms.MenuItem emailAlertMenuItem;
   }
 }
 
