@@ -502,10 +502,9 @@ namespace OpenHardwareMonitor.Utilities
             DateTime result = defaultDate;
             if (dateText != null)
             {
-                if (dateText.Length == 29)
+                if (dateText.Length == 23)
                 {
-                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd HH:mm:ss UTC+00:00", CultureInfo.InvariantCulture);
-
+                    result = DateTime.SpecifyKind(DateTime.ParseExact(dateText, "yyyy-MM-dd HH:mm:ss UTC", CultureInfo.InvariantCulture),DateTimeKind.Utc);
                 }
                 else if (dateText.Length == 10)
                 {

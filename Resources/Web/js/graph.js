@@ -5,7 +5,7 @@ $(window).load(function () {
     var currentPeer = window.location.host;
 
     var rangeFormat = "%Y-%m-%d %T";
-    var utcFormat = "%Y-%m-%d %T %@";
+    var utcFormat = "%Y-%m-%d %T UTC";
     var rangeConv = new AnyTime.Converter({ format: rangeFormat });
     var utcConv = new AnyTime.Converter({ utcFormatOffsetImposed: 0, format: utcFormat });
 
