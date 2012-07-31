@@ -4,6 +4,11 @@ $(window).load(function () {
     var curModel;
     var currentPeer = window.location.host;
 
+    var rangeFormat = "%Y-%m-%d %T";
+    var utcFormat = "%Y-%m-%d %T %@";
+    var rangeConv = new AnyTime.Converter({ format: rangeFormat });
+    var utcConv = new AnyTime.Converter({ utcFormatOffsetImposed: 0, format: utcFormat });
+
     //keeping track of the two datefields
     //so that we don't traverse the DOM tree every time
     var startDateEl = $("#rangeStart");
@@ -158,9 +163,9 @@ $(window).load(function () {
             this.model.set({ "data": null }, { silent: true });
             statusEl.text("Fetching graph data ...");
             if (currentPeer != window.location.host) {
-                this.model.fetch({ data: { start: startDateEl.val(), end: endDateEl.val(), peer: currentPeer} });
+                this.model.fetch({ data: { start: utcConv.format(rangeConv.parse(startDateEl.val())), end: utcConv.format(rangeConv.parse(endDateEl.val())), peer: currentPeer} });
             } else {
-                this.model.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
+                this.model.fetch({ data: {start: utcConv.format(rangeConv.parse(startDateEl.val())), end: utcConv.format(rangeConv.parse(endDateEl.val()))} });
             }
             return;
         }
@@ -202,9 +207,9 @@ $(window).load(function () {
             curModel.set({ "data": null }, { silent: true });
             statusEl.text("Fetching graph data ...");
             if (currentPeer != window.location.host) {
-                curModel.fetch({ data: { start: startDateEl.val(), end: endDateEl.val(), peer: currentPeer} });
+                curModel.fetch({ data: { start: utcConv.format(rangeConv.parse(startDateEl.val())), end: utcConv.format(rangeConv.parse(endDateEl.val())), peer: currentPeer} });
             } else {
-                curModel.fetch({ data: { start: startDateEl.val(), end: endDateEl.val()} });
+                curModel.fetch({ data: {start: utcConv.format(rangeConv.parse(startDateEl.val())), end: utcConv.format(rangeConv.parse(endDateEl.val()))} });
             }
         }
     };
@@ -257,9 +262,6 @@ $(window).load(function () {
         else
             clearInterval(refreshTimer);
     }
-    var rangeFormat = "%Y-%m-%d %T";
-    var rangeConv = new AnyTime.Converter({ format: rangeFormat });
-
 
     $("#rangeToday").click(function (e) { curRangeFn = setTodayRange; curRangeFn(); setupAutoRefresh(); });
 

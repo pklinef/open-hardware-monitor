@@ -502,14 +502,14 @@ namespace OpenHardwareMonitor.Utilities
             DateTime result = defaultDate;
             if (dateText != null)
             {
-                if (dateText.Length == 19)
+                if (dateText.Length == 29)
                 {
-                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture).ToUniversalTime();
+                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd HH:mm:ss UTC+00:00", CultureInfo.InvariantCulture);
 
                 }
                 else if (dateText.Length == 10)
                 {
-                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd", CultureInfo.CurrentCulture).ToUniversalTime();
+                    result = DateTime.ParseExact(dateText, "yyyy-MM-dd", CultureInfo.InvariantCulture);
                 }
             }
             return result;
