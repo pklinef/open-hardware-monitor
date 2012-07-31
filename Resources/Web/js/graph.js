@@ -42,6 +42,7 @@ $(window).load(function () {
             currentPeer = this.model.toJSON().address;
             graph.destroy();
             graph = null;
+            curModel = null;
             if (currentPeer != window.location.host) {
                 coll.reset();
                 coll.fetch({ data: { peer: currentPeer} });
