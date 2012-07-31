@@ -11,19 +11,19 @@ namespace OpenHardwareMonitor.DAL
 {
     public class HttpClient
     {
-        private string GetLocalIP()
+        internal HashSet<String> GetLocalIPs()
         {
             IPHostEntry host;
-            string localIP = "?";
+            HashSet<String> localIPs = new HashSet<string>();
             host = Dns.GetHostEntry(Dns.GetHostName());
             foreach (IPAddress ip in host.AddressList)
             {
                 if (ip.AddressFamily == AddressFamily.InterNetwork)
                 {
-                    localIP = ip.ToString();
+                    localIPs.Add(ip.ToString());
                 }
             }
-            return localIP;
+            return localIPs;
         }
 
         internal bool SendToServer(List<DataManager.AggregateContainer> dataToSendToServer)
@@ -40,8 +40,11 @@ namespace OpenHardwareMonitor.DAL
                 //short-circuiting if this machine is the server
                 //note: not checking for port
                 //assuming only one instance of OHM running on a machine
-                if (IP == GetLocalIP())
+                HashSet<String> ips = GetLocalIPs();
+                if (ips.Contains(IP))
+                {
                     return DataManager.InsertData(dataToSendToServer);
+                }
 
                 string json = JsonConvert.SerializeObject(dataToSendToServer, Formatting.Indented);
 
@@ -49,7 +52,9 @@ namespace OpenHardwareMonitor.DAL
 
                 var res  = SendRequest(json, RemoteUrl);
                 if (res == "OK")
+                {
                     return true;
+                }
             }
             catch (Exception e)
             {
@@ -74,7 +79,8 @@ namespace OpenHardwareMonitor.DAL
                 //short-circuiting if this machine is the server
                 //note: not checking for port
                 //assuming only one instance of OHM running on a machine
-                if (IP == GetLocalIP())
+                HashSet<String> ips = GetLocalIPs();
+                if (ips.Contains(IP))
                 {
 
                     foreach (var item in componentSensorList)
