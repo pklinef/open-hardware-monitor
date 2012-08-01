@@ -40,10 +40,12 @@ $(window).load(function () {
         peerSelect: function (e) {
             e.preventDefault();
             currentPeer = this.model.toJSON().address;
-            graph.destroy();
-            graph = null;
-            $("#sensor").html(" <h1 style='text-align: center;'> Open Hardware Monitor</h1> <p style='text-align: center;'> Select a sensor from the list on the left.</p> ");
-            curModel = null;
+            if (graph) {
+                graph.destroy();
+                graph = null;
+                $("#sensor").html(" <h1 style='text-align: center;'> Open Hardware Monitor</h1> <p style='text-align: center;'> Select a sensor from the list on the left.</p> ");
+                curModel = null;
+            }
             if (currentPeer != window.location.host) {
                 coll.reset();
                 coll.fetch({ data: { peer: currentPeer} });
@@ -259,7 +261,6 @@ $(window).load(function () {
 
     var setupAutoRefresh = function () {
         if (autoFlag) {
-            console.log("Starting auto refresh");
             clearInterval(refreshTimer);
             refreshTimer = setInterval(curRangeFn, 5000);
         }
@@ -311,10 +312,10 @@ $(window).load(function () {
     });
 
     startDateEl.focus(function () {
-        startDateEl.unbind('focus').AnyTime_picker({ format: rangeFormat, placement: "popup" }); ;
+        startDateEl.unbind('focus').AnyTime_picker({ format: rangeFormat, placement: "popup" , latest: rangeConv.parse(endDateEl.val()) }); ;
     });
     endDateEl.focus(function () {
-        endDateEl.unbind('focus').AnyTime_picker({ format: rangeFormat, placement: "popup" }); ;
+        endDateEl.unbind('focus').AnyTime_picker({ format: rangeFormat, placement: "popup" , earliest: rangeConv.parse(startDateEl.val()) }); ;
     });
 
     $('#aggregatePopup').popover({ content: function () {
