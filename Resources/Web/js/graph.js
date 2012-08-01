@@ -42,6 +42,7 @@ $(window).load(function () {
             currentPeer = this.model.toJSON().address;
             graph.destroy();
             graph = null;
+            $("#sensor").html(" <h1 style='text-align: center;'> Open Hardware Monitor</h1> <p style='text-align: center;'> Select a sensor from the list on the left.</p> ");
             curModel = null;
             if (currentPeer != window.location.host) {
                 coll.reset();
